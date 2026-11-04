@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E103A"/>
+      <stop offset="50%" stop-color="#120D2C"/>
+      <stop offset="100%" stop-color="#0B091B"/>
+    </linearGradient>
+    <linearGradient id="purpleGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C084FC"/>
+      <stop offset="100%" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="sheetGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#F3E8FF"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- App Rounded Squircle -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)"/>
+  <rect width="512" height="512" rx="128" stroke="url(#purpleGlow)" stroke-width="6" opacity="0.4"/>
+
+  <!-- Glowing 24h orbital ring -->
+  <circle cx="170" cy="150" r="60" stroke="#C084FC" stroke-width="12" stroke-linecap="round" stroke-dasharray="260 80" filter="url(#glow)"/>
+  <polygon points="190,95 210,110 185,125" fill="#C084FC"/>
+  <text x="170" y="160" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="900" fill="#FFFFFF" text-anchor="middle">24h</text>
+
+  <!-- Notepad Document -->
+  <g transform="translate(130, 110) rotate(8)">
+    <rect x="0" y="0" width="200" height="260" rx="24" fill="url(#sheetGrad)" filter="url(#glow)"/>
+    <!-- Folded corner / notch -->
+    <path d="M 140 260 L 200 200 L 200 240 A 20 20 0 0 1 180 260 Z" fill="#DDD6FE"/>
+    <!-- Text Lines -->
+    <line x1="32" y1="60" x2="168" y2="60" stroke="#A78BFA" stroke-width="12" stroke-linecap="round"/>
+    <line x1="32" y1="100" x2="168" y2="100" stroke="#A78BFA" stroke-width="12" stroke-linecap="round"/>
+    <line x1="32" y1="140" x2="168" y2="140" stroke="#C4B5FD" stroke-width="12" stroke-linecap="round"/>
+    <line x1="32" y1="180" x2="110" y2="180" stroke="#C4B5FD" stroke-width="12" stroke-linecap="round"/>
+  </g>
+
+  <!-- Stylized Editing Pencil -->
+  <g transform="translate(350, 200) rotate(42)">
+    <rect x="-18" y="-70" width="36" height="140" rx="8" fill="url(#purpleGlow)"/>
+    <polygon points="-18,70 18,70 0,110" fill="#F8FAFC"/>
+    <polygon points="-6,98 6,98 0,110" fill="#4C1D95"/>
+    <rect x="-18" y="-70" width="36" height="30" rx="4" fill="#DDD6FE"/>
+  </g>
+
+  <!-- BlinkPad Wordmark -->
+  <text x="256" y="440" font-family="system-ui, -apple-system, 'Inter', sans-serif" font-size="62" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="-1.5">
+    Blink<tspan fill="#C084FC">Pad</tspan>
+  </text>
+  <!-- Swoosh underline -->
+  <path d="M 150 460 Q 256 480 362 460" stroke="url(#purpleGlow)" stroke-width="8" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+*/node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+*/dist/
+dist-ssr/
+build/
+*.local
+
+# Environment variables & secrets (NEVER COMMIT)
+.env
+*.env
+.env.*
+!.env.example
+*.dev.vars
+.dev.vars
+.dev.vars.*
+
+# Firebase service account & credentials (NEVER COMMIT)
+*service-account*.json
+*service_account*.json
+firebase-service-account.json
+*/firebase-service-account.json
+*credentials*.json
+*.pem
+*.key
+
+# User Uploaded binary files & storage
+uploads/
+*/uploads/
+.wrangler/
+*/.wrangler/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.tsbuildinfo

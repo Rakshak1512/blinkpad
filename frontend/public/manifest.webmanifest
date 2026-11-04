@@ -1,0 +1,33 @@
+{
+  "name": "BlinkPad – Ephemeral 24h Sharing Platform",
+  "short_name": "BlinkPad",
+  "description": "Fast temporary text, image, and file sharing with strict 24-hour auto-expiration and full offline support.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0B091B",
+  "theme_color": "#7C3AED",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/maskable-icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
+
