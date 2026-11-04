@@ -14,14 +14,20 @@ export function getFirebaseDb(): Firestore {
     const resolvedPath = path.resolve(process.cwd(), credPath);
 
     let serviceAccount: any;
-    if (fs.existsSync(resolvedPath)) {
+    // Vercel deployments should provide the complete service-account JSON as a secret env var.
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+    } else if (fs.existsSync(resolvedPath)) {
       serviceAccount = JSON.parse(fs.readFileSync(resolvedPath, 'utf8'));
     } else {
-      // Fallback to checking root or default path
       const altPath = path.resolve(process.cwd(), 'firebase-service-account.json');
       if (fs.existsSync(altPath)) {
         serviceAccount = JSON.parse(fs.readFileSync(altPath, 'utf8'));
       }
+    }
+
+    if (serviceAccount?.private_key) {
+      serviceAccount.private_key = String(serviceAccount.private_key).replace(/\\n/g, '\n');
     }
 
     if (!serviceAccount) {
@@ -41,6 +47,24 @@ export function getFirebaseDb(): Firestore {
 }
 
 const COLLECTION_NAME = 'blinkpad_pages';
+
+/** Human-readable companion value for Firebase Console. Numeric milliseconds stay authoritative. */
+function formatIstTimestamp(timestamp: number): string {
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return '';
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  }).formatToParts(new Date(timestamp));
+  const values: Record<string, string> = {};
+  for (const part of parts) values[part.type] = part.value;
+  return `${values.day} ${values.month} ${values.year}, ${values.hour}:${values.minute}:${values.second} ${(values.dayPeriod || '').toUpperCase()}`.trim();
+}
 
 /** Format Unix milliseconds for operators viewing documents in Firebase Console. */
 function formatIstTimestamp(timestamp: number): string {
@@ -100,6 +124,9 @@ export class FirebaseStorage {
         created_at: manifest.created_at,
         expires_at: manifest.expires_at,
         updated_at: manifest.updated_at,
+        created_at_ist: formatIstTimestamp(manifest.created_at),
+        expires_at_ist: formatIstTimestamp(manifest.expires_at),
+        updated_at_ist: formatIstTimestamp(manifest.updated_at),
         // Human-readable IST copies for the Firebase Console; numeric fields remain authoritative.
         created_at_ist: formatIstTimestamp(manifest.created_at),
         expires_at_ist: formatIstTimestamp(manifest.expires_at),
@@ -108,7 +135,11 @@ export class FirebaseStorage {
         has_password: manifest.has_password,
         password_hash: manifest.password_hash,
         password_salt: manifest.password_salt,
-        files: manifest.files,
+        files: manifest.files.map((file) => ({
+          ...file,
+          uploaded_at_ist: formatIstTimestamp(file.uploaded_at),
+          expires_at_ist: formatIstTimestamp(file.expires_at),
+        })),
       },
       { merge: true }
     );
@@ -148,7 +179,9 @@ export class FirebaseStorage {
       {
         content: text,
         content_updated_at: now,
+        content_updated_at_ist: formatIstTimestamp(now),
         updated_at: now,
+        updated_at_ist: formatIstTimestamp(now),
         version: newVersion,
       },
       { merge: true }
