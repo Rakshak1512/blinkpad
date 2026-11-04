@@ -3,7 +3,7 @@ import cors from 'cors';
 import multer from 'multer';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { FirebaseStorage } from './storage/firebase';
+import { FirebaseStorage } from './storage/firebase.ts';
 import {
   generateSalt,
   generateUUID,
@@ -11,15 +11,15 @@ import {
   verifyPassword,
   createAuthToken,
   verifyAuthToken
-} from './services/cryptoService';
+} from './services/cryptoService.ts';
 import {
   isValidPageName,
   sanitizeFilename,
   sanitizePageName,
   isAllowedFileType,
   MAX_FILE_SIZE_BYTES
-} from './utils/validator';
-import { PageFile, PageManifest, PublicPageManifest } from './types';
+} from './utils/validator.ts';
+import { PageFile, PageManifest, PublicPageManifest } from './types.ts';
 
 dotenv.config();
 
