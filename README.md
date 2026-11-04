@@ -79,6 +79,7 @@ This repository is a monorepo. Import the same GitHub repository into Vercel **t
   - `AUTH_SECRET`: a random secret of at least 32 characters
   - `FIREBASE_PROJECT_ID`: your Firebase project ID
   - `FIREBASE_SERVICE_ACCOUNT_JSON`: the complete Firebase service-account JSON as one environment-variable value
+  - `CRON_SECRET`: a separate random secret of at least 16 characters for the scheduled cleanup endpoint
   - `APP_BASE_URL`: the deployed frontend URL
   - `BACKEND_URL`: the deployed backend URL
 
@@ -96,7 +97,7 @@ Do not upload the service-account JSON file to GitHub or expose it in any `VITE_
 
 Replace the backend domain with the actual production URL shown by your backend Vercel project, then redeploy the frontend.
 
-Both Vercel projects deploy from the same Git repository and automatically receive new commits. They are still only two hosting projects: Frontend and Backend. Firebase remains the database.
+Both Vercel projects deploy from the same Git repository and automatically receive new commits. They are still only two hosting projects: Frontend and Backend. Firebase remains the database. The backend's `backend/vercel.json` schedules cleanup once per day at 00:00 UTC. On Vercel Hobby, cron timing can vary within the scheduled hour and jobs run only once per day, so physical deletion can be delayed by up to about 25 hours after a page expires; API access is still rejected at the exact `expires_at` time.
 
 ### Firebase date/time fields
 Firestore keeps the numeric millisecond fields `created_at`, `expires_at`, and `updated_at` unchanged because the 24-hour expiry checks depend on them. New writes also include readable IST companion fields:
