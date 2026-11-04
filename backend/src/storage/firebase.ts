@@ -127,10 +127,6 @@ export class FirebaseStorage {
         created_at_ist: formatIstTimestamp(manifest.created_at),
         expires_at_ist: formatIstTimestamp(manifest.expires_at),
         updated_at_ist: formatIstTimestamp(manifest.updated_at),
-        // Human-readable IST copies for the Firebase Console; numeric fields remain authoritative.
-        created_at_ist: formatIstTimestamp(manifest.created_at),
-        expires_at_ist: formatIstTimestamp(manifest.expires_at),
-        updated_at_ist: formatIstTimestamp(manifest.updated_at),
         version: manifest.version,
         has_password: manifest.has_password,
         password_hash: manifest.password_hash,
