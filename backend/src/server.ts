@@ -615,6 +615,25 @@ app.post('/api/pages/:name/verify-password', async (req: Request, res: Response)
   });
 });
 
+// Controlled 404 handler for unknown routes
+app.use((_req: Request, res: Response) => {
+  res.status(404).json({
+    success: false,
+    error: 'Endpoint not found',
+    code: 'NOT_FOUND',
+  });
+});
+
+// Centralized error handling middleware
+app.use((err: any, _req: Request, res: Response, _next: express.NextFunction) => {
+  console.error('[BlinkPad API Error]', err?.message || err);
+  res.status(err.status || 500).json({
+    success: false,
+    error: err.message || 'Internal server error',
+    code: err.code || 'INTERNAL_ERROR',
+  });
+});
+
 // Export the Express application for Vercel's serverless Express runtime.
 export default app;
 

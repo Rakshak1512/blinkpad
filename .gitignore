@@ -10,6 +10,11 @@ dist/
 dist-ssr/
 build/
 *.local
+backend/index.js
+
+# Vercel
+.vercel
+*/.vercel
 
 # Environment variables & secrets (NEVER COMMIT)
 .env
