@@ -66,7 +66,7 @@ function formatIstTimestamp(timestamp: number): string {
   return `${values.day} ${values.month} ${values.year}, ${values.hour}:${values.minute}:${values.second} ${(values.dayPeriod || '').toUpperCase()}`.trim();
 }
 
-const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
+const UPLOADS_DIR = process.env.UPLOADS_DIR || (process.env.VERCEL ? path.join('/tmp', 'blinkpad-uploads') : path.resolve(process.cwd(), 'uploads'));
 
 // Ensure uploads directory exists
 if (!fs.existsSync(UPLOADS_DIR)) {
