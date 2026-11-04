@@ -66,18 +66,6 @@ function formatIstTimestamp(timestamp: number): string {
   return `${values.day} ${values.month} ${values.year}, ${values.hour}:${values.minute}:${values.second} ${(values.dayPeriod || '').toUpperCase()}`.trim();
 }
 
-/** Format Unix milliseconds for operators viewing documents in Firebase Console. */
-function formatIstTimestamp(timestamp: number): string {
-  if (!Number.isFinite(timestamp) || timestamp <= 0) return '';
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Kolkata',
-    day: 'numeric', month: 'long', year: 'numeric',
-    hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true,
-  }).formatToParts(new Date(timestamp));
-  const values: Record<string, string> = {};
-  for (const part of parts) values[part.type] = part.value;
-  return `${values.day} ${values.month} ${values.year}, ${values.hour}:${values.minute}:${values.second} ${(values.dayPeriod || '').toUpperCase()}`.trim();
-}
 const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
 
 // Ensure uploads directory exists
