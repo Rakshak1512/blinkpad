@@ -25,7 +25,10 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8787;
-const AUTH_SECRET = process.env.AUTH_SECRET || 'quickpad-dev-secret-super-secure-key-123456';
+const AUTH_SECRET = process.env.AUTH_SECRET || (process.env.VERCEL ? '' : 'quickpad-local-development-secret-key-123456');
+if (AUTH_SECRET.length < 32) {
+  throw new Error('AUTH_SECRET must be configured with at least 32 characters before starting BlinkPad.');
+}
 const PAGE_LIFETIME_MS = 24 * 60 * 60 * 1000; // Strict 24 hours
 
 /**
