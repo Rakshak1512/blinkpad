@@ -1,5 +1,5 @@
 import express from 'express';
-import app from './src/server';
+import app from './src/server.js';
 
 // Vercel detects this root-level Express entrypoint and serves every route
 // through the shared application defined in src/server.ts.
