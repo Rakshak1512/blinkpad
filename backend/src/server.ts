@@ -101,6 +101,18 @@ async function isAuthorized(req: Request, manifest: PageManifest): Promise<boole
   return await verifyAuthToken(token, manifest.name, AUTH_SECRET);
 }
 
+// Backend landing route: prevents a confusing 404 when the API base URL is opened directly.
+app.get('/', (_req: Request, res: Response) => {
+  res.status(200).json({
+    success: true,
+    app: 'BlinkPad Backend',
+    message: 'BlinkPad API is running.',
+    health: '/health',
+    api_health: '/api/health',
+    documentation: 'Use the /api/* endpoints for BlinkPad operations.',
+  });
+});
+
 // Health check
 app.get(['/health', '/api/health'], async (_req: Request, res: Response) => {
   const now = Date.now();
