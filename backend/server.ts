@@ -1,4 +1,8 @@
-// Canonical Vercel Express entrypoint.
-// Keep the application and all routes in src/server.ts so local and hosted
-// environments use the exact same Express instance.
-export { default } from './src/server';
+// Vercel entrypoint for the BlinkPad Express API.
+import express from 'express';
+import app from './src/server';
+
+// Referencing the framework here makes the Express runtime explicit while
+// keeping all routes and middleware in the shared application module.
+void express;
+export default app;
