@@ -116,11 +116,20 @@ app.get(['/health', '/api/health'], async (_req: Request, res: Response) => {
   });
 });
 
-// Admin manual cleanup
-app.post('/api/admin/cleanup', async (_req: Request, res: Response) => {
+// Cleanup is invoked by Vercel Cron. Never expose a public destructive endpoint.
+async function handleScheduledCleanup(req: Request, res: Response) {
+  const cronSecret = process.env.CRON_SECRET;
+  const authorization = req.headers.authorization;
+  if (!cronSecret || authorization !== `Bearer ${cronSecret}`) {
+    return res.status(401).json({ success: false, error: 'Unauthorized cleanup request.' });
+  }
+
   const result = await FirebaseStorage.runScheduledCleanup();
-  res.json({ success: true, ...result });
-});
+  return res.json({ success: true, ...result });
+}
+
+app.get('/api/admin/cleanup', handleScheduledCleanup);
+app.post('/api/admin/cleanup', handleScheduledCleanup);
 
 // Create page
 app.post('/api/pages', async (req: Request, res: Response) => {
