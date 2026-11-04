@@ -2,7 +2,7 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import * as fs from 'fs';
 import * as path from 'path';
-import { PageContent, PageFile, PageManifest } from '../types';
+import { PageContent, PageFile, PageManifest } from '../types.ts';
 
 let dbInstance: Firestore | null = null;
 
