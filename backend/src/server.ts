@@ -579,14 +579,19 @@ app.post('/api/pages/:name/verify-password', async (req: Request, res: Response)
   });
 });
 
-// Periodic background 24-hour expiration purge (every 15 minutes)
-setInterval(() => {
-  FirebaseStorage.runScheduledCleanup().catch(() => {});
-}, 15 * 60 * 1000);
+// Export the Express application for Vercel's serverless Express runtime.
+export default app;
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`[BlinkPad Backend] API Server listening on http://localhost:${PORT}`);
-  console.log(`[BlinkPad Backend] Connected to Firebase Firestore Database: ${process.env.FIREBASE_PROJECT_ID || 'blinkpad-7db1e'}`);
-});
+// Local development only: Vercel invokes the exported app and does not keep
+// a long-running process or setInterval alive between requests.
+if (!process.env.VERCEL) {
+  setInterval(() => {
+    FirebaseStorage.runScheduledCleanup().catch(() => {});
+  }, 15 * 60 * 1000);
+
+  app.listen(PORT, () => {
+    console.log(`[BlinkPad Backend] API Server listening on http://localhost:${PORT}`);
+    console.log(`[BlinkPad Backend] Connected to Firebase Firestore Database: ${process.env.FIREBASE_PROJECT_ID || 'blinkpad-7db1e'}`);
+  });
+}
 
