@@ -25,9 +25,15 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8787;
-const AUTH_SECRET = process.env.AUTH_SECRET || (process.env.VERCEL ? '' : 'quickpad-local-development-secret-key-123456');
-if (AUTH_SECRET.length < 32) {
-  throw new Error('AUTH_SECRET must be configured with at least 32 characters before starting BlinkPad.');
+// Resolve the signing secret only when a password-protected operation needs it.
+// Do not throw during module initialization: Vercel must still be able to start
+// the function and serve public health/status endpoints when env vars are missing.
+function getAuthSecret(): string {
+  const secret = process.env.AUTH_SECRET || (process.env.VERCEL ? '' : 'quickpad-local-development-secret-key-123456');
+  if (secret.length < 32) {
+    throw new Error('AUTH_SECRET must be configured with at least 32 characters for password-protected pages.');
+  }
+  return secret;
 }
 const PAGE_LIFETIME_MS = 24 * 60 * 60 * 1000; // Strict 24 hours
 
@@ -104,7 +110,7 @@ async function isAuthorized(req: Request, manifest: PageManifest): Promise<boole
   }
 
   if (!token) return false;
-  return await verifyAuthToken(token, manifest.name, AUTH_SECRET);
+  return await verifyAuthToken(token, manifest.name, getAuthSecret());
 }
 
 // Backend landing route: prevents a confusing 404 when the API base URL is opened directly.
@@ -208,7 +214,7 @@ app.post('/api/pages', async (req: Request, res: Response) => {
 
   let token: string | undefined = undefined;
   if (hasPassword) {
-    token = await createAuthToken(name, expiresAt, AUTH_SECRET);
+    token = await createAuthToken(name, expiresAt, getAuthSecret());
   }
 
   return res.status(201).json({
@@ -601,7 +607,7 @@ app.post('/api/pages/:name/verify-password', async (req: Request, res: Response)
     return res.status(401).json({ error: 'Incorrect password', code: 'INVALID_PASSWORD' });
   }
 
-  const token = await createAuthToken(name, manifest.expires_at, AUTH_SECRET);
+  const token = await createAuthToken(name, manifest.expires_at, getAuthSecret());
   return res.json({
     success: true,
     token,
