@@ -31,6 +31,12 @@ if (AUTH_SECRET.length < 32) {
 }
 const PAGE_LIFETIME_MS = 24 * 60 * 60 * 1000; // Strict 24 hours
 
+// Express 5 types route parameters as string | string[].
+// Page names are single path segments, so normalize them before validation.
+function getSingleRouteParam(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
+}
+
 /**
  * Formats a Unix millisecond timestamp into:
  * `D Month YYYY, hh:mm:ss AM/PM` (e.g. `4 November 2026, 11:53:47 PM`)
@@ -214,7 +220,7 @@ app.post('/api/pages', async (req: Request, res: Response) => {
 
 // Get page
 app.get('/api/pages/:name', async (req: Request, res: Response) => {
-  const name = sanitizePageName(req.params.name);
+  const name = sanitizePageName(getSingleRouteParam(req.params.name));
   const manifest = await FirebaseStorage.getManifest(name);
 
   if (!manifest) {
@@ -256,7 +262,7 @@ app.get('/api/pages/:name', async (req: Request, res: Response) => {
 
 // Get page status
 app.get('/api/pages/:name/status', async (req: Request, res: Response) => {
-  const name = sanitizePageName(req.params.name);
+  const name = sanitizePageName(getSingleRouteParam(req.params.name));
   const manifest = await FirebaseStorage.getManifest(name);
 
   if (!manifest) {
@@ -289,7 +295,7 @@ app.get('/api/pages/:name/status', async (req: Request, res: Response) => {
 
 // Delete page
 app.delete('/api/pages/:name', async (req: Request, res: Response) => {
-  const name = sanitizePageName(req.params.name);
+  const name = sanitizePageName(getSingleRouteParam(req.params.name));
   const manifest = await FirebaseStorage.getManifest(name);
 
   if (!manifest) {
@@ -312,7 +318,7 @@ app.delete('/api/pages/:name', async (req: Request, res: Response) => {
 
 // Save content (text)
 app.put('/api/pages/:name/content', async (req: Request, res: Response) => {
-  const name = sanitizePageName(req.params.name);
+  const name = sanitizePageName(getSingleRouteParam(req.params.name));
   const manifest = await FirebaseStorage.getManifest(name);
 
   if (!manifest) {
@@ -362,7 +368,7 @@ app.put('/api/pages/:name/content', async (req: Request, res: Response) => {
 
 // Clear content
 app.delete('/api/pages/:name/content', async (req: Request, res: Response) => {
-  const name = sanitizePageName(req.params.name);
+  const name = sanitizePageName(getSingleRouteParam(req.params.name));
   const manifest = await FirebaseStorage.getManifest(name);
 
   if (!manifest) {
@@ -394,7 +400,7 @@ app.delete('/api/pages/:name/content', async (req: Request, res: Response) => {
 
 // Upload files
 app.post('/api/pages/:name/files', upload.any(), async (req: Request, res: Response) => {
-  const name = sanitizePageName(req.params.name);
+  const name = sanitizePageName(getSingleRouteParam(req.params.name));
   const manifest = await FirebaseStorage.getManifest(name);
 
   if (!manifest) {
@@ -466,7 +472,7 @@ app.post('/api/pages/:name/files', upload.any(), async (req: Request, res: Respo
 
 // Download / View file
 app.get('/api/pages/:name/files/:fileId', async (req: Request, res: Response) => {
-  const name = sanitizePageName(req.params.name);
+  const name = sanitizePageName(getSingleRouteParam(req.params.name));
   const fileId = req.params.fileId;
   const downloadMode = req.query.download === 'true';
 
@@ -525,7 +531,7 @@ app.get('/api/pages/:name/files/:fileId', async (req: Request, res: Response) =>
 
 // Delete single file
 app.delete('/api/pages/:name/files/:fileId', async (req: Request, res: Response) => {
-  const name = sanitizePageName(req.params.name);
+  const name = sanitizePageName(getSingleRouteParam(req.params.name));
   const fileId = req.params.fileId;
 
   const manifest = await FirebaseStorage.getManifest(name);
@@ -568,7 +574,7 @@ app.delete('/api/pages/:name/files/:fileId', async (req: Request, res: Response)
 
 // Verify password (Unlimited attempts, NO locks, NO rate limits, NO CAPTCHAs)
 app.post('/api/pages/:name/verify-password', async (req: Request, res: Response) => {
-  const name = sanitizePageName(req.params.name);
+  const name = sanitizePageName(getSingleRouteParam(req.params.name));
   const passwordAttempt = req.body?.password;
 
   const manifest = await FirebaseStorage.getManifest(name);
