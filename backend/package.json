@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "description": "BlinkPad Express API backend with Firebase Firestore",
-  "main": "server.ts",
+  "main": "index.ts",
   "scripts": {
     "start": "tsx src/server.ts",
     "server": "tsx src/server.ts",
