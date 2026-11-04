@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { FieldPath, getFirestore } from 'firebase-admin/firestore';
 import * as fs from 'node:fs';
