@@ -2,15 +2,16 @@
   "name": "quickpad-backend",
   "version": "1.0.0",
   "type": "module",
-  "description": "Cloudflare Workers + R2 API backend for QuickPad",
+  "description": "BlinkPad Express API backend with Firebase Firestore",
   "main": "src/index.ts",
   "scripts": {
     "start": "tsx src/server.ts",
     "server": "tsx src/server.ts",
-    "dev": "wrangler dev",
+    "dev": "tsx src/server.ts",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test test/services.test.mjs test/worker.test.mjs"
+    "test": "tsx --test test/services.test.mjs test/worker.test.mjs",
+    "backfill:ist": "tsx scripts/backfill-ist-timestamps.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241022.0",
