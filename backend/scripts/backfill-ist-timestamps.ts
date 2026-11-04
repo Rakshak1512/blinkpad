@@ -47,7 +47,7 @@ async function main() {
   const db = getFirestore(app);
   const collection = db.collection('blinkpad_pages');
 
-  let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+  let cursor: any;
   let updated = 0;
 
   while (true) {
