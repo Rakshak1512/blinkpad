@@ -41,6 +41,19 @@ export function getFirebaseDb(): Firestore {
 }
 
 const COLLECTION_NAME = 'blinkpad_pages';
+
+/** Format Unix milliseconds for operators viewing documents in Firebase Console. */
+function formatIstTimestamp(timestamp: number): string {
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return '';
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric', month: 'long', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true,
+  }).formatToParts(new Date(timestamp));
+  const values: Record<string, string> = {};
+  for (const part of parts) values[part.type] = part.value;
+  return `${values.day} ${values.month} ${values.year}, ${values.hour}:${values.minute}:${values.second} ${(values.dayPeriod || '').toUpperCase()}`.trim();
+}
 const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
 
 // Ensure uploads directory exists
@@ -87,6 +100,10 @@ export class FirebaseStorage {
         created_at: manifest.created_at,
         expires_at: manifest.expires_at,
         updated_at: manifest.updated_at,
+        // Human-readable IST copies for the Firebase Console; numeric fields remain authoritative.
+        created_at_ist: formatIstTimestamp(manifest.created_at),
+        expires_at_ist: formatIstTimestamp(manifest.expires_at),
+        updated_at_ist: formatIstTimestamp(manifest.updated_at),
         version: manifest.version,
         has_password: manifest.has_password,
         password_hash: manifest.password_hash,
