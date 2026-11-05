@@ -64,26 +64,68 @@ export const api = {
     files: File[],
     onProgress?: (percent: number) => void
   ): Promise<{ success: boolean; files: any[] }> {
-    // Let the browser/Axios add the multipart boundary automatically.
-    // Manually setting Content-Type omits the boundary and makes Multer reject the upload.
+    if (!files.length) return { success: true, files: [] };
     const headers = getAuthHeaders(name);
+    const pagePath = `${API_BASE_URL}/pages/${encodeURIComponent(name)}/files`;
+    const totalBytes = files.reduce((sum, file) => sum + file.size, 0) || 1;
 
-    const formData = new FormData();
-    for (const file of files) {
-      formData.append('files', file);
+    // Request short-lived, single-object signed URLs from our authenticated API.
+    const prepare = await axios.post(`${pagePath}/upload-url`, {
+      files: files.map(file => ({
+        name: file.name,
+        type: file.type || 'application/octet-stream',
+        size: file.size,
+      })),
+    }, { headers });
+
+    const uploads: any[] = prepare.data?.uploads || [];
+    if (uploads.length !== files.length) {
+      throw new Error('The backend did not prepare every selected file for upload.');
     }
 
-    const res = await axios.post(`${API_BASE_URL}/pages/${encodeURIComponent(name)}/files`, formData, {
-      headers,
-      onUploadProgress: (progressEvent: AxiosProgressEvent) => {
-        if (progressEvent.total && onProgress) {
-          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          onProgress(percent);
-        }
-      },
-    });
+    let completedBytes = 0;
+    try {
+      // Send bytes directly to Firebase Cloud Storage. This avoids Vercel's
+      // serverless request-body limit and keeps files durable between instances.
+      for (let index = 0; index < files.length; index++) {
+        const file = files[index];
+        const upload = uploads[index];
+        let lastFileBytes = 0;
 
-    return res.data;
+        await axios.put(upload.upload_url, file, {
+          headers: { 'Content-Type': upload.content_type || file.type || 'application/octet-stream' },
+          onUploadProgress: (event: AxiosProgressEvent) => {
+            const currentBytes = event.total
+              ? Math.min(file.size, Math.round((event.loaded / event.total) * file.size))
+              : event.loaded;
+            const delta = Math.max(0, currentBytes - lastFileBytes);
+            lastFileBytes = currentBytes;
+            if (onProgress) {
+              onProgress(Math.min(99, Math.round(((completedBytes + currentBytes) / totalBytes) * 100)));
+            }
+          },
+        });
+        completedBytes += file.size;
+        if (onProgress) onProgress(Math.min(99, Math.round((completedBytes / totalBytes) * 100)));
+      }
+
+      const finalize = await axios.post(`${pagePath}/complete`, {
+        files: uploads.map(upload => ({
+          id: upload.id,
+          name: upload.name,
+          r2_key: upload.r2_key,
+        })),
+      }, { headers });
+
+      if (onProgress) onProgress(100);
+      return finalize.data;
+    } catch (error) {
+      // Best-effort cleanup for any upload that failed before it was committed.
+      await axios.post(`${pagePath}/abort`, {
+        r2_keys: uploads.map(upload => upload.r2_key),
+      }, { headers }).catch(() => undefined);
+      throw error;
+    }
   },
 
   async deleteFile(name: string, fileId: string): Promise<{ success: boolean }> {
