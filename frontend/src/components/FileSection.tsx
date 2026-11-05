@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   UploadCloud,
-  File,
+  File as FileIcon,
   FileText,
   FileArchive,
   FileCode,
@@ -93,12 +93,14 @@ export const FileSection: React.FC<FileSectionProps> = ({
           const extension = file.type.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
           fileName = `screenshot_${timeStr}.${extension}`;
         }
-        filesFromClipboard.push(new File([file], fileName, { type: file.type }));
+        filesFromClipboard.push(new globalThis.File([file], fileName, { type: file.type }));
       };
 
-      for (let i = 0; i < (items?.length || 0); i++) {
-        const item = items[i];
-        if (item.kind === 'file') addClipboardFile(item.getAsFile());
+      if (items) {
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item?.kind === 'file') addClipboardFile(item.getAsFile());
+        }
       }
 
       // Safari and some mobile browsers expose pasted files here instead of
@@ -199,7 +201,7 @@ export const FileSection: React.FC<FileSectionProps> = ({
     if (['html', 'js', 'ts', 'json', 'py', 'css', 'sql'].includes(ext || '')) {
       return <FileCode className="w-5 h-5 text-blue-500" />;
     }
-    return <File className="w-5 h-5 text-slate-500" />;
+    return <FileIcon className="w-5 h-5 text-slate-500" />;
   };
 
   const isImageFile = (file: PageFile) => {
