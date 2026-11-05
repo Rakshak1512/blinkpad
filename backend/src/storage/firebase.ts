@@ -57,14 +57,15 @@ export async function consumeApiRequest(ipAddress: string, limit = 60): Promise<
   const windowStart = Math.floor(now / 60_000) * 60_000;
   const windowEnd = windowStart + 60_000;
   const ipHash = createHash('sha256').update(ipAddress || 'unknown').digest('hex');
-  const ref = db.collection(RATE_LIMIT_COLLECTION).doc(`${ipHash}_${windowStart}`);
+  const ref = db.collection(RATE_LIMIT_COLLECTION).doc(ipHash);
   return db.runTransaction(async (transaction) => {
     const snap = await transaction.get(ref);
-    const currentCount = snap.exists ? Number(snap.data()?.count || 0) : 0;
+    const sameWindow = snap.exists && Number(snap.data()?.window_start) === windowStart;
+    const currentCount = sameWindow ? Number(snap.data()?.count || 0) : 0;
     if (currentCount >= limit) {
       return { allowed: false, remaining: 0, retryAfterSeconds: Math.max(1, Math.ceil((windowEnd - now) / 1000)) };
     }
-    transaction.set(ref, { count: currentCount + 1, window_start: windowStart, expires_at: windowEnd + 24 * 60 * 60 * 1000 });
+    transaction.set(ref, { count: currentCount + 1, window_start: windowStart, updated_at: now });
     return { allowed: true, remaining: Math.max(0, limit - currentCount - 1), retryAfterSeconds: 0 };
   });
 }
