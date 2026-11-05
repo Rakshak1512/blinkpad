@@ -131,9 +131,42 @@ export const TextEditor: React.FC<TextEditorProps> = ({
     performSave(text);
   };
 
-  const handleCopyAll = () => {
-    navigator.clipboard.writeText(text);
-    showToast('All text copied to clipboard!', 'success');
+  const handleCopyAll = async () => {
+    if (!text) return;
+
+    const fallbackCopy = (): boolean => {
+      const temporary = document.createElement('textarea');
+      temporary.value = text;
+      temporary.setAttribute('readonly', '');
+      temporary.style.position = 'fixed';
+      temporary.style.opacity = '0';
+      temporary.style.pointerEvents = 'none';
+      document.body.appendChild(temporary);
+      temporary.select();
+      temporary.setSelectionRange(0, temporary.value.length);
+      const copied = document.execCommand('copy');
+      temporary.remove();
+      return copied;
+    };
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else if (!fallbackCopy()) {
+        throw new Error('Clipboard access is unavailable in this browser.');
+      }
+      showToast('All text copied to clipboard!', 'success');
+    } catch {
+      try {
+        if (fallbackCopy()) {
+          showToast('All text copied to clipboard!', 'success');
+        } else {
+          showToast('Copy was blocked by the browser. Select the text and copy it manually.', 'error');
+        }
+      } catch {
+        showToast('Copy was blocked by the browser. Select the text and copy it manually.', 'error');
+      }
+    }
   };
 
   // Stats
