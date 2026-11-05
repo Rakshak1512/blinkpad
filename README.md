@@ -78,7 +78,8 @@ This repository is a monorepo. Import the same GitHub repository into Vercel **t
   - `APP_ENV=production`
   - `AUTH_SECRET`: a random secret of at least 32 characters
   - `FIREBASE_PROJECT_ID`: your Firebase project ID
-  - `FIREBASE_SERVICE_ACCOUNT_JSON`: the complete Firebase service-account JSON as one environment-variable value
+  - `FIREBASE_STORAGE_BUCKET`: the exact bucket name from Firebase Console > Storage
+  - `FIREBASE_SERVICE_ACCOUNT_JSON`: the complete Firebase service-account JSON as one environment-variable value (service account needs Firestore access and Storage Object Admin permission)
   - `CRON_SECRET`: a separate random secret of at least 16 characters for the scheduled cleanup endpoint
   - `APP_BASE_URL`: the deployed frontend URL
   - `BACKEND_URL`: the deployed backend URL
@@ -113,5 +114,10 @@ npm install
 npm run backfill:ist
 ```
 
-### Important file-upload limitation before production
-The current Firebase adapter saves file bytes to a local `uploads/` directory while Firestore stores the file metadata. Vercel Functions do not provide durable local file storage across invocations or instances. Therefore, **file uploads/downloads are not production-durable on Vercel yet**. Configure a persistent object-storage provider before relying on attachments in production. Firestore metadata and text pages are separate from the binary-file storage requirement.
+### Persistent file attachments and browser upload setup
+
+File metadata and text stay in Firestore; file bytes are stored in Firebase Cloud Storage. The backend issues short-lived signed upload URLs, so browsers upload attachments directly to the bucket instead of sending large file bodies through Vercel Functions.
+
+After enabling Firebase Storage and setting `FIREBASE_STORAGE_BUCKET` in the backend project, configure bucket CORS for every frontend origin. The full required steps and a ready-to-apply CORS example are in [backend/DEPLOYMENT.md](backend/DEPLOYMENT.md). Both backend CORS (`APP_BASE_URL` / `ALLOWED_ORIGINS`) and bucket CORS must include the exact frontend origin.
+
+Password-protected pages also require `AUTH_SECRET` (at least 32 characters). The frontend's `VITE_API_BASE_URL` must point to the deployed backend's `/api` endpoint.
