@@ -24,6 +24,8 @@ Configure these under **Vercel Dashboard > Project Settings > Environment Variab
 | `FIREBASE_PROJECT_ID` | Optional | Firebase project ID (defaults to `blinkpad-7db1e`). | `blinkpad-7db1e` |
 | `FIREBASE_STORAGE_BUCKET` | **Yes** (for attachments) | Exact Cloud Storage bucket name from Firebase Console > Storage. | `your-project.firebasestorage.app` |
 | `AUTH_SECRET` | **Yes** (for password protection) | Secret key (minimum 32 characters) used for HMAC page session tokens. | `a-secure-random-string-at-least-32-chars-long` |
+| `APP_BASE_URL` | **Yes** (browser API access) | Exact deployed frontend origin (scheme + domain, no path). | `https://your-frontend.vercel.app` |
+| `ALLOWED_ORIGINS` | Optional | Comma-separated additional frontend origins. | `https://your-frontend.netlify.app,https://your-preview.vercel.app` |
 | `CRON_SECRET` | Recommended | Bearer secret authorizing Vercel Cron cleanup jobs. | `secure-cron-random-secret-key` |
 | `APP_NAME` | Optional | Human-readable app name. | `BlinkPad` |
 | `BACKEND_URL` | Optional | Canonical production backend URL. | `https://blinkpad-qs77.vercel.app` |
