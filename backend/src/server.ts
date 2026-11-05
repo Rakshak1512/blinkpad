@@ -4,6 +4,7 @@ import multer from 'multer';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { FirebaseStorage, consumeApiRequest } from './storage/firebase.ts';
+import { FirebaseFileStorage } from './storage/firebaseFiles.ts';
 import {
   generateSalt,
   generateUUID,
@@ -450,6 +451,138 @@ app.delete('/api/pages/:name/content', async (req: Request, res: Response) => {
   await FirebaseStorage.saveManifest(name, manifest);
 
   return res.json({ success: true, message: 'Page content cleared' });
+});
+
+// Create short-lived, page-authorized signed URLs so file bytes go directly to
+// Firebase Cloud Storage (Vercel Functions are not a durable file proxy).
+app.post('/api/pages/:name/files/upload-url', async (req: Request, res: Response) => {
+  const name = sanitizePageName(getSingleRouteParam(req.params.name));
+  const manifest = await FirebaseStorage.getManifest(name);
+  if (!manifest) return res.status(404).json({ error: 'Page not found', code: 'NOT_FOUND' });
+  if (Date.now() >= manifest.expires_at) {
+    return res.status(410).json({ error: 'This BlinkPad page has expired and its data is scheduled for permanent deletion.', code: 'PAGE_EXPIRED' });
+  }
+  if (manifest.has_password && !(await isAuthorized(req, manifest))) {
+    return res.status(401).json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' });
+  }
+
+  const requestedFiles = req.body?.files;
+  if (!Array.isArray(requestedFiles) || requestedFiles.length < 1 || requestedFiles.length > 20) {
+    return res.status(400).json({ error: 'Select between 1 and 20 files per upload.', code: 'INVALID_FILES' });
+  }
+
+  const now = Date.now();
+  const uploads = [];
+  for (const item of requestedFiles) {
+    if (!item || typeof item.name !== 'string' || !Number.isFinite(Number(item.size)) || Number(item.size) <= 0) {
+      return res.status(400).json({ error: 'Invalid file details.', code: 'INVALID_FILE' });
+    }
+    const size = Number(item.size);
+    if (size > MAX_FILE_SIZE_BYTES) {
+      return res.status(413).json({ error: `File exceeds maximum allowed limit of ${MAX_FILE_SIZE_BYTES / (1024 * 1024)}MB`, code: 'FILE_TOO_LARGE' });
+    }
+    const safeName = sanitizeFilename(item.name);
+    if (!isAllowedFileType(safeName)) {
+      return res.status(400).json({ error: `File type is not permitted: ${safeName}`, code: 'FILE_TYPE_NOT_ALLOWED' });
+    }
+    const id = generateUUID();
+    const key = `pages/${name}/files/${id}_${safeName}`;
+    const contentType = typeof item.type === 'string' && item.type.trim()
+      ? item.type.trim()
+      : 'application/octet-stream';
+    const expiresAt = Math.min(now + PAGE_LIFETIME_MS, manifest.expires_at);
+    const uploadUrl = await FirebaseFileStorage.createSignedUploadUrl(key, contentType);
+    uploads.push({
+      id,
+      name: safeName,
+      mime_type: contentType,
+      size,
+      uploaded_at: now,
+      expires_at: expiresAt,
+      r2_key: key,
+      upload_url: uploadUrl,
+      content_type: contentType,
+    });
+  }
+
+  return res.status(200).json({ success: true, uploads });
+});
+
+// Finalize only objects that really exist in Cloud Storage; never trust client file sizes.
+app.post('/api/pages/:name/files/complete', async (req: Request, res: Response) => {
+  const name = sanitizePageName(getSingleRouteParam(req.params.name));
+  const manifest = await FirebaseStorage.getManifest(name);
+  if (!manifest) return res.status(404).json({ error: 'Page not found', code: 'NOT_FOUND' });
+  if (Date.now() >= manifest.expires_at) {
+    return res.status(410).json({ error: 'This BlinkPad page has expired and its data is scheduled for permanent deletion.', code: 'PAGE_EXPIRED' });
+  }
+  if (manifest.has_password && !(await isAuthorized(req, manifest))) {
+    return res.status(401).json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' });
+  }
+
+  const completed = req.body?.files;
+  if (!Array.isArray(completed) || completed.length < 1 || completed.length > 20) {
+    return res.status(400).json({ error: 'Invalid uploaded file list.', code: 'INVALID_FILES' });
+  }
+
+  const now = Date.now();
+  const records: PageFile[] = [];
+  for (const item of completed) {
+    if (!item || typeof item.id !== 'string' || typeof item.name !== 'string') {
+      return res.status(400).json({ error: 'Invalid uploaded file metadata.', code: 'INVALID_FILE' });
+    }
+    const safeName = sanitizeFilename(item.name);
+    const expectedKey = `pages/${name}/files/${item.id}_${safeName}`;
+    if (item.r2_key !== expectedKey || manifest.files.some(file => file.id === item.id)) {
+      return res.status(400).json({ error: 'Invalid or duplicate upload reference.', code: 'INVALID_UPLOAD_REFERENCE' });
+    }
+    if (!isAllowedFileType(safeName)) {
+      return res.status(400).json({ error: 'File type is not permitted.', code: 'FILE_TYPE_NOT_ALLOWED' });
+    }
+
+    const metadata = await FirebaseFileStorage.getObjectMetadata(expectedKey);
+    if (!metadata) {
+      return res.status(400).json({ error: `Upload did not finish for ${safeName}.`, code: 'UPLOAD_NOT_FOUND' });
+    }
+    if (metadata.size <= 0 || metadata.size > MAX_FILE_SIZE_BYTES) {
+      await FirebaseFileStorage.deleteObject(expectedKey);
+      return res.status(413).json({ error: 'Uploaded file size is invalid or exceeds the allowed limit.', code: 'FILE_TOO_LARGE' });
+    }
+
+    records.push({
+      id: item.id,
+      name: safeName,
+      mime_type: metadata.contentType || 'application/octet-stream',
+      size: metadata.size,
+      uploaded_at: now,
+      expires_at: Math.min(now + PAGE_LIFETIME_MS, manifest.expires_at),
+      r2_key: expectedKey,
+    });
+  }
+
+  manifest.files.push(...records);
+  manifest.updated_at = now;
+  manifest.version += 1;
+  await FirebaseStorage.saveManifest(name, manifest);
+  return res.status(201).json({ success: true, files: records });
+});
+
+// Remove temporary objects when a multi-file browser upload fails.
+app.post('/api/pages/:name/files/abort', async (req: Request, res: Response) => {
+  const name = sanitizePageName(getSingleRouteParam(req.params.name));
+  const manifest = await FirebaseStorage.getManifest(name);
+  if (!manifest) return res.status(404).json({ error: 'Page not found', code: 'NOT_FOUND' });
+  if (manifest.has_password && !(await isAuthorized(req, manifest))) {
+    return res.status(401).json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' });
+  }
+  const keys = req.body?.r2_keys;
+  if (Array.isArray(keys)) {
+    const prefix = `pages/${name}/files/`;
+    await Promise.all(keys
+      .filter((key: unknown): key is string => typeof key === 'string' && key.startsWith(prefix) && !manifest.files.some(file => file.r2_key === key))
+      .map((key: string) => FirebaseFileStorage.deleteObject(key)));
+  }
+  return res.json({ success: true });
 });
 
 // Upload files
