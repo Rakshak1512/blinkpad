@@ -78,7 +78,7 @@ const allowedOrigins = (process.env.APP_BASE_URL || process.env.ALLOWED_ORIGINS 
   .split(',').map((origin) => origin.trim()).filter(Boolean);
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || !allowedOrigins.length || allowedOrigins.includes(origin)) return callback(null, true);
+    if (!origin || allowedOrigins.includes(origin) || (!process.env.VERCEL && allowedOrigins.length === 0)) return callback(null, true);
     return callback(new Error('Origin is not allowed by BlinkPad CORS policy.'));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
