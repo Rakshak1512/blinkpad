@@ -3,7 +3,7 @@ import cors from 'cors';
 import multer from 'multer';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { FirebaseStorage } from './storage/firebase.ts';
+import { FirebaseStorage, consumeApiRequest } from './storage/firebase.ts';
 import {
   generateSalt,
   generateUUID,
@@ -24,6 +24,7 @@ import { PageFile, PageManifest, PublicPageManifest } from './types.ts';
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 8787;
 // Resolve the signing secret only when a password-protected operation needs it.
 // Do not throw during module initialization: Vercel must still be able to start
@@ -73,11 +74,24 @@ export function formatBlinkpadDate(timestamp: number): string {
 }
 
 // Middleware
+const allowedOrigins = (process.env.APP_BASE_URL || process.env.ALLOWED_ORIGINS || '')
+  .split(',').map((origin) => origin.trim()).filter(Boolean);
 app.use(cors({
-  origin: '*',
+  origin: (origin, callback) => {
+    if (!origin || !allowedOrigins.length || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Origin is not allowed by BlinkPad CORS policy.'));
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -155,6 +169,26 @@ async function handleScheduledCleanup(req: Request, res: Response) {
 app.get('/api/admin/cleanup', handleScheduledCleanup);
 app.post('/api/admin/cleanup', handleScheduledCleanup);
 
+// Shared per-IP API protection. Health checks stay available for monitoring.
+app.use('/api', async (req: Request, res: Response, next) => {
+  if (req.path === '/health') return next();
+  try {
+    const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+    const result = await consumeApiRequest(clientIp, 60);
+    res.setHeader('RateLimit-Limit', '60');
+    res.setHeader('RateLimit-Remaining', String(result.remaining));
+    res.setHeader('RateLimit-Reset', String(Math.ceil(Date.now() / 1000) + result.retryAfterSeconds));
+    if (!result.allowed) {
+      res.setHeader('Retry-After', String(result.retryAfterSeconds));
+      return res.status(429).json({ success: false, error: 'Too many requests. Please wait before trying again.', code: 'RATE_LIMITED', retry_after_seconds: result.retryAfterSeconds });
+    }
+    return next();
+  } catch (error: any) {
+    console.error('[BlinkPad rate limiter]', error?.message || error);
+    return res.status(503).json({ success: false, error: 'Security rate limiter is temporarily unavailable. Please retry shortly.', code: 'RATE_LIMIT_UNAVAILABLE' });
+  }
+});
+
 // Create page
 app.post('/api/pages', async (req: Request, res: Response) => {
   const rawName = req.body?.name;
@@ -191,6 +225,8 @@ app.post('/api/pages', async (req: Request, res: Response) => {
   let passwordSalt: string | null = null;
 
   if (password && typeof password === 'string' && password.trim().length > 0) {
+    // Validate signing configuration before writing, avoiding orphaned pages on missing AUTH_SECRET.
+    getAuthSecret();
     hasPassword = true;
     passwordSalt = generateSalt();
     passwordHash = await hashPassword(password.trim(), passwordSalt);
@@ -627,9 +663,10 @@ app.use((_req: Request, res: Response) => {
 // Centralized error handling middleware
 app.use((err: any, _req: Request, res: Response, _next: express.NextFunction) => {
   console.error('[BlinkPad API Error]', err?.message || err);
-  res.status(err.status || 500).json({
+  const status = Number(err.status) || 500;
+  res.status(status).json({
     success: false,
-    error: err.message || 'Internal server error',
+    error: status >= 500 ? 'BlinkPad could not complete this request. Check backend configuration and Firebase availability.' : (err.message || 'Request failed'),
     code: err.code || 'INTERNAL_ERROR',
   });
 });
