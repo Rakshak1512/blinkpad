@@ -165,8 +165,10 @@ export const PadPage: React.FC<PadPageProps> = ({ theme, onToggleTheme }) => {
               syncStatus: 'synced',
             });
           }
-        } catch {
-          showToast('Could not initialize page.', 'error');
+        } catch (createError: any) {
+          const apiMessage = createError?.response?.data?.error || createError?.response?.data?.message;
+          const code = createError?.response?.data?.code;
+          showToast(apiMessage || (createError?.message === 'Network Error' ? 'Cannot reach BlinkPad API. Check the deployed backend URL.' : `Could not initialize page${code ? ` (${code})` : ''}. Check Firebase configuration and backend logs.`), 'error');
         }
       } else if (status === 410) {
         setIsExpired(true);
