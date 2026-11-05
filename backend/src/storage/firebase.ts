@@ -3,6 +3,7 @@ import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'node:crypto';
+import { FirebaseFileStorage } from './firebaseFiles.ts';
 import { PageContent, PageFile, PageManifest } from '../types.ts';
 
 let dbInstance: Firestore | null = null;
@@ -86,13 +87,6 @@ function formatIstTimestamp(timestamp: number): string {
   const values: Record<string, string> = {};
   for (const part of parts) values[part.type] = part.value;
   return `${values.day} ${values.month} ${values.year}, ${values.hour}:${values.minute}:${values.second} ${(values.dayPeriod || '').toUpperCase()}`.trim();
-}
-
-const UPLOADS_DIR = process.env.UPLOADS_DIR || (process.env.VERCEL ? path.join('/tmp', 'blinkpad-uploads') : path.resolve(process.cwd(), 'uploads'));
-
-// Ensure uploads directory exists
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
 export class FirebaseStorage {
@@ -230,65 +224,30 @@ export class FirebaseStorage {
     contentType: string,
     metadata?: Record<string, string>
   ): Promise<void> {
-    const safeKey = key.replace(/[/\\]/g, '_');
-    const filePath = path.join(UPLOADS_DIR, safeKey);
-    const metaPath = filePath + '.meta.json';
-
     let buffer: Buffer;
     if (Buffer.isBuffer(body)) {
       buffer = body;
     } else if (body instanceof ArrayBuffer) {
       buffer = Buffer.from(body);
     } else {
-      // ReadableStream to Buffer
-      const chunks: any[] = [];
+      const chunks: Buffer[] = [];
       const reader = (body as any).getReader();
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        chunks.push(value);
+        chunks.push(Buffer.from(value));
       }
       buffer = Buffer.concat(chunks);
     }
-
-    await fs.promises.writeFile(filePath, buffer);
-    await fs.promises.writeFile(
-      metaPath,
-      JSON.stringify({ contentType: contentType || 'application/octet-stream', ...metadata }),
-      'utf8'
-    );
+    await FirebaseFileStorage.uploadFile(key, buffer, contentType, metadata);
   }
 
   static async getFile(key: string): Promise<{ buffer: Buffer; contentType: string } | null> {
-    const safeKey = key.replace(/[/\\]/g, '_');
-    const filePath = path.join(UPLOADS_DIR, safeKey);
-    const metaPath = filePath + '.meta.json';
-
-    if (!fs.existsSync(filePath)) return null;
-
-    const buffer = await fs.promises.readFile(filePath);
-    let contentType = 'application/octet-stream';
-    if (fs.existsSync(metaPath)) {
-      try {
-        const meta = JSON.parse(await fs.promises.readFile(metaPath, 'utf8'));
-        if (meta.contentType) contentType = meta.contentType;
-      } catch {}
-    }
-
-    return { buffer, contentType };
+    return FirebaseFileStorage.getFile(key);
   }
 
   static async deleteObject(key: string): Promise<void> {
-    const safeKey = key.replace(/[/\\]/g, '_');
-    const filePath = path.join(UPLOADS_DIR, safeKey);
-    const metaPath = filePath + '.meta.json';
-
-    if (fs.existsSync(filePath)) {
-      await fs.promises.unlink(filePath).catch(() => {});
-    }
-    if (fs.existsSync(metaPath)) {
-      await fs.promises.unlink(metaPath).catch(() => {});
-    }
+    await FirebaseFileStorage.deleteObject(key);
   }
 
   static async runScheduledCleanup(): Promise<{ pagesDeleted: number; filesDeleted: number }> {
