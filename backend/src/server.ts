@@ -74,8 +74,10 @@ export function formatBlinkpadDate(timestamp: number): string {
 }
 
 // Middleware
-const allowedOrigins = (process.env.APP_BASE_URL || process.env.ALLOWED_ORIGINS || '')
-  .split(',').map((origin) => origin.trim()).filter(Boolean);
+const allowedOrigins = [...new Set([
+  process.env.APP_BASE_URL || '',
+  process.env.ALLOWED_ORIGINS || '',
+].flatMap((value) => value.split(',')).map((origin) => origin.trim()).filter(Boolean))];
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin) || (!process.env.VERCEL && allowedOrigins.length === 0)) return callback(null, true);
