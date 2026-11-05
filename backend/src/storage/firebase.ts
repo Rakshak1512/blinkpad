@@ -2,6 +2,7 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import * as fs from 'fs';
 import * as path from 'path';
+import { createHash } from 'node:crypto';
 import { PageContent, PageFile, PageManifest } from '../types.ts';
 
 let dbInstance: Firestore | null = null;
@@ -47,6 +48,26 @@ export function getFirebaseDb(): Firestore {
 }
 
 const COLLECTION_NAME = 'blinkpad_pages';
+const RATE_LIMIT_COLLECTION = 'blinkpad_api_rate_limits';
+
+/** Atomic, cross-instance fixed-window API limit backed by Firestore. */
+export async function consumeApiRequest(ipAddress: string, limit = 60): Promise<{ allowed: boolean; remaining: number; retryAfterSeconds: number }> {
+  const db = getFirebaseDb();
+  const now = Date.now();
+  const windowStart = Math.floor(now / 60_000) * 60_000;
+  const windowEnd = windowStart + 60_000;
+  const ipHash = createHash('sha256').update(ipAddress || 'unknown').digest('hex');
+  const ref = db.collection(RATE_LIMIT_COLLECTION).doc(`${ipHash}_${windowStart}`);
+  return db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    const currentCount = snap.exists ? Number(snap.data()?.count || 0) : 0;
+    if (currentCount >= limit) {
+      return { allowed: false, remaining: 0, retryAfterSeconds: Math.max(1, Math.ceil((windowEnd - now) / 1000)) };
+    }
+    transaction.set(ref, { count: currentCount + 1, window_start: windowStart, expires_at: windowEnd + 24 * 60 * 60 * 1000 });
+    return { allowed: true, remaining: Math.max(0, limit - currentCount - 1), retryAfterSeconds: 0 };
+  });
+}
 
 /** Human-readable companion value for Firebase Console. Numeric milliseconds stay authoritative. */
 function formatIstTimestamp(timestamp: number): string {
@@ -98,7 +119,7 @@ export class FirebaseStorage {
       };
     } catch (err: any) {
       console.error(`Firebase error getting manifest for ${pageName}:`, err.message);
-      return null;
+      throw new Error('Database unavailable while reading page data. Check Firebase credentials, Firestore access, and project configuration.');
     }
   }
 
