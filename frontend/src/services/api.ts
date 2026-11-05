@@ -90,16 +90,12 @@ export const api = {
       for (let index = 0; index < files.length; index++) {
         const file = files[index];
         const upload = uploads[index];
-        let lastFileBytes = 0;
-
         await axios.put(upload.upload_url, file, {
           headers: { 'Content-Type': upload.content_type || file.type || 'application/octet-stream' },
           onUploadProgress: (event: AxiosProgressEvent) => {
             const currentBytes = event.total
               ? Math.min(file.size, Math.round((event.loaded / event.total) * file.size))
               : event.loaded;
-            const delta = Math.max(0, currentBytes - lastFileBytes);
-            lastFileBytes = currentBytes;
             if (onProgress) {
               onProgress(Math.min(99, Math.round(((completedBytes + currentBytes) / totalBytes) * 100)));
             }
