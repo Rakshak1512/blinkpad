@@ -116,8 +116,8 @@ npm run backfill:ist
 
 ### Persistent file attachments and browser upload setup
 
-File metadata and text stay in Firestore; file bytes are stored in Firebase Cloud Storage. The backend issues short-lived signed upload URLs, so browsers upload attachments directly to the bucket instead of sending large file bodies through Vercel Functions.
+File metadata and text stay in Firestore; file bytes are stored in Firebase Cloud Storage. The backend issues short-lived signed upload URLs, so browsers upload attachments directly to the bucket instead of sending file bodies through Vercel Functions.
 
-After enabling Firebase Storage and setting `FIREBASE_STORAGE_BUCKET` in the backend project, configure bucket CORS for every frontend origin. The full required steps and a ready-to-apply CORS example are in [backend/DEPLOYMENT.md](backend/DEPLOYMENT.md). Both backend CORS (`APP_BASE_URL` / `ALLOWED_ORIGINS`) and bucket CORS must include the exact frontend origin.
+After enabling Firebase Storage and setting `FIREBASE_STORAGE_BUCKET` in the backend project, configure bucket CORS for every frontend origin. See [backend/DEPLOYMENT.md](backend/DEPLOYMENT.md) for the full steps and a ready-to-apply CORS example. Both backend CORS (`APP_BASE_URL` / `ALLOWED_ORIGINS`) and bucket CORS must include the exact frontend origin.
 
 Password-protected pages also require `AUTH_SECRET` (at least 32 characters). The frontend's `VITE_API_BASE_URL` must point to the deployed backend's `/api` endpoint.
