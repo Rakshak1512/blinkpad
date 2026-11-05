@@ -10,7 +10,6 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 let client: S3Client | null = null;
 
 function getConfig() {
-  const accountId = process.env.B2_KEY_ID ? undefined : undefined;
   const endpoint = process.env.B2_ENDPOINT;
   const bucket = process.env.B2_BUCKET_NAME;
   const accessKeyId = process.env.B2_KEY_ID;
