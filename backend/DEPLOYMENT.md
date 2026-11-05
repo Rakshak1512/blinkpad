@@ -39,7 +39,7 @@ BlinkPad requests short-lived signed upload URLs from the backend, then the brow
 1. In Firebase Console, open **Storage** and create/enable a bucket for the same Firebase project used by Firestore.
 2. Copy the exact bucket name shown in the Storage page into the Vercel backend environment variable `FIREBASE_STORAGE_BUCKET`. Do not assume the bucket suffix; newer and older Firebase projects can display different bucket names.
 3. Ensure the service account in `FIREBASE_SERVICE_ACCOUNT_JSON` can access Firestore and has **Storage Object Admin** permissions for that bucket.
-4. Configure bucket CORS to allow direct browser uploads from every deployed frontend origin. Save this as `cors.json`, replacing/adding the actual frontend domains:
+4. Configure bucket CORS to allow direct browser uploads from every deployed frontend origin. Edit the checked-in sample `backend/storage-cors.json`, replacing/adding the actual frontend domains:
 
 ```json
 [
@@ -58,7 +58,7 @@ BlinkPad requests short-lived signed upload URLs from the backend, then the brow
 Apply it with Google Cloud CLI after replacing the bucket name:
 
 ```bash
-gcloud storage buckets update gs://YOUR_BUCKET_NAME --cors-file=cors.json
+gcloud storage buckets update gs://YOUR_BUCKET_NAME --cors-file=backend/storage-cors.json
 ```
 
 5. Set `APP_BASE_URL` (and `ALLOWED_ORIGINS` when needed) to the exact frontend origins, then redeploy the backend. Set `VITE_API_BASE_URL=https://YOUR-BACKEND-VERCEL-DOMAIN/api` in the frontend project and redeploy the frontend.
