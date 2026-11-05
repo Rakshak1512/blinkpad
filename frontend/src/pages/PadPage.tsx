@@ -119,6 +119,7 @@ export const PadPage: React.FC<PadPageProps> = ({ theme, onToggleTheme }) => {
       // If local draft had unsynced changes, preserve or sync them
       if (localDraft && localDraft.syncStatus === 'pending' && localDraft.content !== data.content) {
         setContent(localDraft.content);
+        setVersion(localDraft.version);
         setHasOfflineDraft(true);
         showToast('Preserved local offline draft. Ready to sync.', 'info');
       } else {
@@ -225,7 +226,8 @@ export const PadPage: React.FC<PadPageProps> = ({ theme, onToggleTheme }) => {
       updatedAt: now,
       expiresAt,
       version: version + 1,
-      syncStatus: navigator.onLine ? 'synced' : 'pending',
+      // The cloud is not authoritative until api.saveContent succeeds.
+      syncStatus: 'pending',
     });
 
     if (!navigator.onLine) {
