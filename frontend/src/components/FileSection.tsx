@@ -77,23 +77,32 @@ export const FileSection: React.FC<FileSectionProps> = ({
       if (!items) return;
 
       const filesFromClipboard: File[] = [];
+      const seenClipboardFiles = new Set<string>();
+
+      const addClipboardFile = (file: File | null) => {
+        if (!file) return;
+        const identity = `${file.name}:${file.size}:${file.type}:${file.lastModified}`;
+        if (seenClipboardFiles.has(identity)) return;
+        seenClipboardFiles.add(identity);
+
+        let fileName = file.name;
+        if (fileName === 'image.png' || !fileName) {
+          const now = new Date();
+          const timeStr = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+          const extension = file.type.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+          fileName = `screenshot_${timeStr}.${extension}`;
+        }
+        filesFromClipboard.push(new File([file], fileName, { type: file.type }));
+      };
 
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
-        if (item.kind === 'file') {
-          const file = item.getAsFile();
-          if (file) {
-            let fileName = file.name;
-            if (fileName === 'image.png' || !fileName) {
-              const now = new Date();
-              const timeStr = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-              fileName = `screenshot_${timeStr}.png`;
-            }
-            const namedFile = new (window.File)([file], fileName, { type: file.type });
-            filesFromClipboard.push(namedFile);
-          }
-        }
+        if (item.kind === 'file') addClipboardFile(item.getAsFile());
       }
+
+      // Safari and some mobile browsers expose pasted files here instead of
+      // consistently populating ClipboardItem.getAsFile().
+      Array.from(e.clipboardData?.files || []).forEach(addClipboardFile);
 
       if (filesFromClipboard.length > 0) {
         showToast(`Detected ${filesFromClipboard.length} file/screenshot from clipboard. Uploading...`, 'info');
