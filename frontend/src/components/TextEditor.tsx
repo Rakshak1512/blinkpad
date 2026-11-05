@@ -63,19 +63,14 @@ export const TextEditor: React.FC<TextEditorProps> = ({
 
   const performSave = useCallback(async (textToSave: string): Promise<boolean> => {
     if (isExpired) return false;
-    if (!navigator.onLine) {
-      setSaveStatus('offline');
-      return false;
-    }
-
-    setSaveStatus('saving');
+    setSaveStatus(navigator.onLine ? 'saving' : 'offline');
     setErrorMessage(null);
 
     try {
       const success = await onSave(textToSave);
       if (success) {
         lastSavedTextRef.current = textToSave;
-        setSaveStatus('saved');
+        setSaveStatus(navigator.onLine ? 'saved' : 'offline');
         return true;
       } else {
         setSaveStatus('error');
@@ -104,7 +99,8 @@ export const TextEditor: React.FC<TextEditorProps> = ({
 
     // Debounced autosave (1.5 seconds)
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    if (navigator.onLine && !isExpired) {
+    if (!isExpired) {
+      // onSave persists the local draft first, then syncs when a connection exists.
       debounceTimerRef.current = setTimeout(() => {
         performSave(newText);
       }, 1500);
