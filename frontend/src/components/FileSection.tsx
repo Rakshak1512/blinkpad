@@ -74,7 +74,8 @@ export const FileSection: React.FC<FileSectionProps> = ({
     const handlePaste = (e: ClipboardEvent) => {
       if (isExpired) return;
       const items = e.clipboardData?.items;
-      if (!items) return;
+      const clipboardFiles = e.clipboardData?.files;
+      if (!items?.length && !clipboardFiles?.length) return;
 
       const filesFromClipboard: File[] = [];
       const seenClipboardFiles = new Set<string>();
@@ -95,14 +96,14 @@ export const FileSection: React.FC<FileSectionProps> = ({
         filesFromClipboard.push(new File([file], fileName, { type: file.type }));
       };
 
-      for (let i = 0; i < items.length; i++) {
+      for (let i = 0; i < (items?.length || 0); i++) {
         const item = items[i];
         if (item.kind === 'file') addClipboardFile(item.getAsFile());
       }
 
       // Safari and some mobile browsers expose pasted files here instead of
       // consistently populating ClipboardItem.getAsFile().
-      Array.from(e.clipboardData?.files || []).forEach(addClipboardFile);
+      Array.from(clipboardFiles || []).forEach(addClipboardFile);
 
       if (filesFromClipboard.length > 0) {
         showToast(`Detected ${filesFromClipboard.length} file/screenshot from clipboard. Uploading...`, 'info');
