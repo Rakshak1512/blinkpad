@@ -72,7 +72,7 @@ export const HomePage: React.FC = () => {
             return;
           }
         } else {
-          setErrorMessage(err?.response?.data?.error || 'Failed to initialize page.');
+          setErrorMessage(err?.response?.data?.error || err?.response?.data?.message || (err?.message === 'Network Error' ? 'Cannot reach BlinkPad backend. Check the API URL and backend deployment.' : 'Page creation failed. Please try again.'));
           setIsSubmitting(false);
           return;
         }
@@ -98,11 +98,11 @@ export const HomePage: React.FC = () => {
         {/* Hero Logo & Brand Title */}
         <div className="flex flex-col items-center space-y-3">
           <div className="relative">
-            <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-brand-500 rounded-3xl blur-md opacity-70"></div>
+            <div className="absolute -inset-1 bg-gradient-to-r from-teal-500 to-amber-400 rounded-3xl blur-md opacity-70"></div>
             <img
               src="/logo.png"
               alt="BlinkPad"
-              className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-3xl shadow-2xl shadow-purple-900/50 object-cover"
+              className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-3xl shadow-2xl shadow-teal-900/30 object-cover"
             />
           </div>
 
@@ -112,7 +112,7 @@ export const HomePage: React.FC = () => {
           </div>
 
           <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-slate-900 dark:text-white">
-            Fast ephemeral sharing in <span className="bg-gradient-to-r from-purple-400 to-brand-400 bg-clip-text text-transparent">seconds</span>.
+            Fast ephemeral sharing in <span className="bg-gradient-to-r from-teal-500 to-amber-500 bg-clip-text text-transparent">seconds</span>.
           </h1>
           <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 max-w-xl mx-auto leading-relaxed">
             Zero signups, full offline IndexedDB support. Paste screenshots (<kbd className="px-1.5 py-0.5 text-xs bg-slate-200 dark:bg-slate-800 rounded font-mono">Ctrl+V</kbd>), share files, collaborate, and auto-expire in 24 hours.
@@ -120,7 +120,7 @@ export const HomePage: React.FC = () => {
         </div>
 
         {/* Input Card */}
-        <div className="bg-white dark:bg-[#130F2E] border border-slate-200/90 dark:border-purple-900/40 rounded-3xl p-5 sm:p-7 shadow-xl shadow-purple-950/20 text-left space-y-4">
+        <div className="bg-white dark:bg-[#102321] border border-slate-200/90 dark:border-teal-800/50 rounded-3xl p-5 sm:p-7 shadow-xl shadow-purple-950/20 text-left space-y-4">
           <form onSubmit={handleGo} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
@@ -130,7 +130,7 @@ export const HomePage: React.FC = () => {
               {/* Clean Single Input + GO Button */}
               <div className="flex flex-col sm:flex-row items-stretch gap-2.5">
                 <div className="relative flex-1 flex items-center">
-                  <span className="absolute left-4 font-mono text-purple-400 text-sm font-bold select-none">
+                  <span className="absolute left-4 font-mono text-teal-500 dark:text-teal-300 text-sm font-bold select-none">
                     /
                   </span>
                   <input
@@ -140,7 +140,7 @@ export const HomePage: React.FC = () => {
                       setPageName(e.target.value);
                       if (errorMessage) setErrorMessage(null);
                     }}
-                    className="w-full pl-8 pr-4 py-3.5 bg-slate-50 dark:bg-[#1C1642]/80 border border-slate-300 dark:border-purple-800/50 rounded-2xl text-slate-900 dark:text-white font-mono text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                    className="w-full pl-8 pr-4 py-3.5 bg-slate-50 dark:bg-[#142D2A] border border-slate-300 dark:border-teal-700/60 rounded-2xl text-slate-900 dark:text-white font-mono text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
                     autoFocus
                   />
                 </div>
@@ -148,7 +148,7 @@ export const HomePage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="py-3.5 px-8 rounded-2xl bg-gradient-to-r from-purple-600 to-brand-600 hover:from-purple-500 hover:to-brand-500 active:scale-95 text-white font-extrabold text-sm transition-all shadow-md shadow-brand-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="py-3.5 px-8 rounded-2xl bg-gradient-to-r from-teal-600 to-emerald-500 hover:from-teal-500 hover:to-emerald-400 active:scale-95 text-white font-extrabold text-sm transition-all shadow-md shadow-brand-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   <span>Go</span>
                   <ArrowRight className="w-4 h-4" />
@@ -185,7 +185,7 @@ export const HomePage: React.FC = () => {
                         setPassword(e.target.value);
                         if (errorMessage) setErrorMessage(null);
                       }}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#1C1642]/80 border border-slate-300 dark:border-purple-800/50 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#142D2A] border border-slate-300 dark:border-teal-700/60 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
                     />
                   </div>
 
@@ -200,11 +200,11 @@ export const HomePage: React.FC = () => {
                         setConfirmPassword(e.target.value);
                         if (errorMessage) setErrorMessage(null);
                       }}
-                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#1C1642]/80 border border-slate-300 dark:border-purple-800/50 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#142D2A] border border-slate-300 dark:border-teal-700/60 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
                     />
                   </div>
 
-                  <p className="text-[11px] text-slate-400 dark:text-purple-300/70">
+                  <p className="text-[11px] text-slate-400 dark:text-teal-200/70">
                     If set, visitors must enter this password to view or edit this pad on any device.
                   </p>
                 </div>
@@ -220,7 +220,7 @@ export const HomePage: React.FC = () => {
 
           {/* PWA Install Banner inside card if available */}
           {isInstallable && (
-            <div className="pt-3 border-t border-slate-100 dark:border-purple-900/30 flex items-center justify-between">
+            <div className="pt-3 border-t border-slate-100 dark:border-teal-900/40 flex items-center justify-between">
               <span className="text-xs text-slate-500 dark:text-slate-400">Install BlinkPad on your desktop or mobile:</span>
               <button
                 onClick={install}
@@ -238,8 +238,8 @@ export const HomePage: React.FC = () => {
 
         {/* Feature Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left pt-4">
-          <div className="p-5 rounded-3xl bg-white dark:bg-[#130F2E]/70 border border-slate-200/80 dark:border-purple-900/30 space-y-2">
-            <div className="p-2.5 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 w-fit">
+          <div className="p-5 rounded-3xl bg-white dark:bg-[#102321]/70 border border-slate-200/80 dark:border-teal-900/40 space-y-2">
+            <div className="p-2.5 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-teal-500 dark:text-teal-300 w-fit">
               <Clock className="w-5 h-5" />
             </div>
             <h3 className="font-bold text-sm text-slate-900 dark:text-white">Strict 24h Expiry</h3>
@@ -248,7 +248,7 @@ export const HomePage: React.FC = () => {
             </p>
           </div>
 
-          <div className="p-5 rounded-3xl bg-white dark:bg-[#130F2E]/70 border border-slate-200/80 dark:border-purple-900/30 space-y-2">
+          <div className="p-5 rounded-3xl bg-white dark:bg-[#102321]/70 border border-slate-200/80 dark:border-teal-900/40 space-y-2">
             <div className="p-2.5 rounded-2xl bg-brand-500/10 text-brand-600 dark:text-brand-400 w-fit">
               <HardDrive className="w-5 h-5" />
             </div>
@@ -258,8 +258,8 @@ export const HomePage: React.FC = () => {
             </p>
           </div>
 
-          <div className="p-5 rounded-3xl bg-white dark:bg-[#130F2E]/70 border border-slate-200/80 dark:border-purple-900/30 space-y-2">
-            <div className="p-2.5 rounded-2xl bg-pink-500/10 text-pink-600 dark:text-pink-400 w-fit">
+          <div className="p-5 rounded-3xl bg-white dark:bg-[#102321]/70 border border-slate-200/80 dark:border-teal-900/40 space-y-2">
+            <div className="p-2.5 rounded-2xl bg-amber-500/10 text-amber-700 dark:text-amber-300 w-fit">
               <Copy className="w-5 h-5" />
             </div>
             <h3 className="font-bold text-sm text-slate-900 dark:text-white">Screenshot Pasting</h3>
