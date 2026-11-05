@@ -74,7 +74,15 @@ export function formatBlinkpadDate(timestamp: number): string {
 }
 
 // Middleware
+// Keep known production frontends working even if APP_BASE_URL is not set.
+// Additional deployment-specific origins can be supplied through APP_BASE_URL
+// and/or the comma-separated ALLOWED_ORIGINS environment variable.
+const defaultAllowedOrigins = [
+  'https://blinkpad-frontend.netlify.app',
+  'https://blinkpad-4efw.vercel.app',
+];
 const allowedOrigins = [...new Set([
+  ...defaultAllowedOrigins,
   process.env.APP_BASE_URL || '',
   process.env.ALLOWED_ORIGINS || '',
 ].flatMap((value) => value.split(',')).map((origin) => origin.trim()).filter(Boolean))];
@@ -85,6 +93,8 @@ app.use(cors({
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Disposition', 'Content-Length', 'ETag'],
+  maxAge: 86400,
 }));
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
