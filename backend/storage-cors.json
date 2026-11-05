@@ -1,0 +1,11 @@
+[
+  {
+    "origin": [
+      "https://blinkpad-frontend.netlify.app",
+      "https://blinkpad-4efw.vercel.app"
+    ],
+    "method": ["GET", "HEAD", "PUT"],
+    "responseHeader": ["Content-Type", "ETag"],
+    "maxAgeSeconds": 3600
+  }
+]
