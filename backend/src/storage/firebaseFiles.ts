@@ -17,6 +17,28 @@ function getBucket() {
 }
 
 export class FirebaseFileStorage {
+  static async createSignedUploadUrl(key: string, contentType: string): Promise<string> {
+    const file = getBucket().file(key);
+    const [url] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'write',
+      expires: Date.now() + 15 * 60 * 1000,
+      contentType: contentType || 'application/octet-stream',
+    });
+    return url;
+  }
+
+  static async getObjectMetadata(key: string): Promise<{ size: number; contentType: string } | null> {
+    const file = getBucket().file(key);
+    const [exists] = await file.exists();
+    if (!exists) return null;
+    const [metadata] = await file.getMetadata();
+    return {
+      size: Number(metadata.size || 0),
+      contentType: metadata.contentType || 'application/octet-stream',
+    };
+  }
+
   static async uploadFile(
     key: string,
     body: Buffer,
