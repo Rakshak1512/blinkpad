@@ -64,10 +64,9 @@ export const api = {
     files: File[],
     onProgress?: (percent: number) => void
   ): Promise<{ success: boolean; files: any[] }> {
-    const headers = {
-      ...getAuthHeaders(name),
-      'Content-Type': 'multipart/form-data',
-    };
+    // Let the browser/Axios add the multipart boundary automatically.
+    // Manually setting Content-Type omits the boundary and makes Multer reject the upload.
+    const headers = getAuthHeaders(name);
 
     const formData = new FormData();
     for (const file of files) {
@@ -138,7 +137,9 @@ export const api = {
   },
 
   getFileViewUrl(name: string, fileId: string): string {
-    return `${API_BASE_URL}/pages/${encodeURIComponent(name)}/files/${fileId}`;
+    const token = getPageToken(name);
+    const url = `${API_BASE_URL}/pages/${encodeURIComponent(name)}/files/${fileId}`;
+    return token ? `${url}?auth=${encodeURIComponent(token)}` : url;
   },
 
   downloadFile(name: string, fileId: string, filename: string): void {
