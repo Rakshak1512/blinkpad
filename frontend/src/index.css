@@ -4,7 +4,7 @@
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 dark:bg-[#0B091B] dark:text-slate-100 min-h-screen antialiased transition-colors duration-200;
+    @apply bg-slate-50 text-slate-900 dark:bg-[#0B1716] dark:text-slate-100 min-h-screen antialiased transition-colors duration-200;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
@@ -28,13 +28,13 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(168, 85, 247, 0.25);
+  background: rgba(13, 148, 136, 0.28);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(168, 85, 247, 0.45);
+  background: rgba(13, 148, 136, 0.48);
 }
 
 .glass-panel {
-  @apply bg-white/80 dark:bg-[#130F2E]/80 backdrop-blur-md border border-slate-200/80 dark:border-purple-900/40;
+  @apply bg-white/80 dark:bg-[#102321]/85 backdrop-blur-md border border-slate-200/80 dark:border-teal-900/50;
 }
