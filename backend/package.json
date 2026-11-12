@@ -2,7 +2,7 @@
   "name": "quickpad-backend",
   "version": "1.0.0",
   "type": "module",
-  "description": "BlinkPad Express API backend with Firebase Firestore",
+  "description": "BlinkPad Express API backend with Supabase PostgreSQL and Supabase Storage",
   "main": "index.js",
   "scripts": {
     "build": "esbuild src/server.ts --bundle --platform=node --target=node20 --format=esm --packages=external --outfile=index.js --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\"",
@@ -11,8 +11,7 @@
     "dev": "tsx src/server.ts",
     "deploy": "vercel --prod",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test test/services.test.mjs test/worker.test.mjs",
-    "backfill:ist": "tsx scripts/backfill-ist-timestamps.ts"
+    "test": "tsx --test test/services.test.mjs test/api.test.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241022.0",
@@ -25,12 +24,10 @@
     "wrangler": "^3.80.0"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
     "cors": "^2.8.6",
     "dotenv": "^18.0.9",
     "express": "^5.3.0",
-    "firebase-admin": "^14.5.0",
-    "multer": "^2.5.0",
-    "@aws-sdk/client-s3": "^3.850.0",
-    "@aws-sdk/s3-request-presigner": "^3.850.0"
+    "multer": "^2.5.0"
   }
 }

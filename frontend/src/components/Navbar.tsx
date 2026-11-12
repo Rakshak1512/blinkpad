@@ -5,21 +5,20 @@ import {
   Check,
   Clock,
   Lock,
+  Unlock,
   Sun,
   Moon,
   Trash2,
-  Download,
-  Wifi,
+  Share2,
   WifiOff,
   RotateCw,
-  CheckCircle2,
-  AlertCircle
+  DownloadCloud
 } from 'lucide-react';
 import { useCountdown } from '../hooks/useCountdown';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 import { syncManager, type SyncState } from '../services/syncManager';
-import { formatDate } from '../utils/formatters';
 import { useToast } from './Toast';
+import { ShareModal } from './ShareModal';
 
 interface NavbarProps {
   pageName?: string;
@@ -28,6 +27,7 @@ interface NavbarProps {
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
   onDeletePageClick?: () => void;
+  onPasswordClick?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -37,12 +37,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   theme,
   onToggleTheme,
   onDeletePageClick,
+  onPasswordClick,
 }) => {
   const { showToast } = useToast();
   const { isInstallable, install } = usePwaInstall();
   const [copied, setCopied] = useState(false);
   const [syncState, setSyncState] = useState<SyncState>(navigator.onLine ? 'idle' : 'offline');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const countdown = useCountdown(expiresAt);
 
@@ -72,160 +74,167 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   const handleManualSync = async () => {
-    showToast('Syncing with cloud...', 'info');
+    showToast('Syncing with Supabase cloud...', 'info');
     const res = await syncManager.syncAll();
     if (res.success) {
       showToast('All changes synced successfully!', 'success');
     } else {
-      showToast('Sync completed with errors.', 'warning');
+      showToast('Sync completed with warnings.', 'warning');
     }
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-purple-900/30 bg-white/85 dark:bg-[#0B091B]/85 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
-        {/* Brand */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <Link
-            to="/"
-            className="flex items-center gap-2.5 font-black text-lg text-slate-900 dark:text-white group"
-          >
-            <img
-              src="/pwa-192x192.png"
-              alt="BlinkPad Logo"
-              className="w-8 h-8 rounded-xl shadow-md shadow-brand-500/20"
-            />
-            <span className="tracking-tight text-xl font-extrabold">
-              Blink<span className="text-brand-500 dark:text-brand-400">Pad</span>
-            </span>
-          </Link>
-
-          {pageName && (
-            <div className="flex items-center gap-1.5 pl-2.5 border-l border-slate-200 dark:border-purple-900/40 text-sm">
-              <span className="text-slate-400 font-mono">/</span>
-              <span className="font-semibold text-slate-800 dark:text-slate-200 font-mono truncate max-w-[110px] sm:max-w-[180px]">
-                {pageName}
+    <>
+      <header className="sticky top-0 z-40 w-full border-b border-slate-200/90 dark:border-white/[0.08] bg-white/80 dark:bg-[#0B091B]/80 backdrop-blur-xl transition-all">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
+          {/* Brand & Pad Indicator */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link
+              to="/"
+              className="flex items-center gap-2.5 font-black text-lg text-slate-900 dark:text-white group"
+            >
+              <div className="relative">
+                <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-brand-500 rounded-xl blur-sm opacity-50 group-hover:opacity-100 transition-opacity" />
+                <img
+                  src="/pwa-192x192.png"
+                  alt="BlinkPad"
+                  className="relative w-8 h-8 rounded-xl shadow-md object-cover"
+                />
+              </div>
+              <span className="tracking-tight text-xl font-extrabold hidden sm:inline">
+                Blink<span className="bg-gradient-to-r from-purple-500 to-brand-400 bg-clip-text text-transparent">Pad</span>
               </span>
-              <button
-                onClick={handleCopyLink}
-                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg transition-colors ml-0.5 cursor-pointer"
-                title="Copy page link"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-brand-500" /> : <Copy className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          )}
-        </div>
+            </Link>
 
-        {/* Controls */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Connectivity / Sync Status Badge */}
-          <div className="flex items-center">
-            {!isOnline || syncState === 'offline' ? (
-              <div
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30"
-                title="Working offline. Drafts are preserved in IndexedDB."
-              >
-                <WifiOff className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Offline</span>
-              </div>
-            ) : syncState === 'syncing' ? (
-              <div
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 animate-pulse"
-                title="Syncing pending edits with server..."
-              >
-                <RotateCw className="w-3.5 h-3.5 animate-spin" />
-                <span className="hidden sm:inline">Syncing...</span>
-              </div>
-            ) : syncState === 'synced' ? (
-              <div
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/30"
-                title="All changes synced to cloud."
-              >
-                <CheckCircle2 className="w-3.5 h-3.5 text-brand-500" />
-                <span className="hidden sm:inline">Synced</span>
-              </div>
-            ) : syncState === 'failed' ? (
-              <button
-                onClick={handleManualSync}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30 hover:bg-red-500/20 cursor-pointer"
-                title="Click to retry sync"
-              >
-                <AlertCircle className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Sync Failed</span>
-              </button>
-            ) : (
-              <div
-                className="flex items-center gap-1.5 px-2 py-1 text-xs text-slate-400 dark:text-slate-500"
-                title="Connected to cloud"
-              >
-                <Wifi className="w-3.5 h-3.5 text-brand-500/70" />
+            {pageName && (
+              <div className="flex items-center gap-1 sm:gap-1.5 pl-2 sm:pl-3 border-l border-slate-200 dark:border-white/10">
+                <div
+                  onClick={handleCopyLink}
+                  title="Click to copy pad URL"
+                  className="group flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/20 text-xs sm:text-sm font-mono font-semibold cursor-pointer transition-all active:scale-95"
+                >
+                  <span>/{pageName}</span>
+                  {copied ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 transition-opacity" />
+                  )}
+                </div>
               </div>
             )}
           </div>
 
-          {/* PWA Install Button (surfaced when installable) */}
-          {isInstallable && (
+          {/* Right Controls */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5">
+            {pageName && (
+              <>
+                {/* 12h Expiration Countdown Badge */}
+                {expiresAt && (
+                  <div
+                    title={`Strict 12-hour expiration: ${countdown.formatted} remaining`}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all ${
+                      countdown.isWarning
+                        ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 animate-pulse'
+                        : 'bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10'
+                    }`}
+                  >
+                    <Clock className={`w-3.5 h-3.5 ${countdown.isWarning ? 'text-rose-500' : 'text-purple-500'}`} />
+                    <span className="font-mono">{countdown.formatted}</span>
+                  </div>
+                )}
+
+                {/* Password status badge / trigger */}
+                {onPasswordClick && (
+                  <button
+                    onClick={onPasswordClick}
+                    title={hasPassword ? 'Pad is password protected (Click to change)' : 'Pad is public (Click to protect)'}
+                    className={`p-2 rounded-xl border text-xs font-semibold transition-all active:scale-95 ${
+                      hasPassword
+                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
+                        : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:text-purple-500 hover:border-purple-500/30'
+                    }`}
+                  >
+                    {hasPassword ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                  </button>
+                )}
+
+                {/* Share Button */}
+                <button
+                  onClick={() => setShowShareModal(true)}
+                  title="Share pad link & QR code"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-md shadow-purple-600/20 active:scale-95 transition-all"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Share</span>
+                </button>
+              </>
+            )}
+
+            {/* Offline / Online Sync Indicator */}
+            {isOnline ? (
+              syncState === 'syncing' ? (
+                <div
+                  title="Syncing changes with Supabase..."
+                  className="p-2 rounded-xl bg-blue-500/10 text-blue-500 border border-blue-500/20"
+                >
+                  <RotateCw className="w-4 h-4 animate-spin" />
+                </div>
+              ) : null
+            ) : (
+              <button
+                onClick={handleManualSync}
+                title="You are offline. Click to retry sync when network recovers."
+                className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-semibold animate-pulse"
+              >
+                <WifiOff className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Offline</span>
+              </button>
+            )}
+
+            {/* PWA Install Button */}
+            {isInstallable && (
+              <button
+                onClick={install}
+                title="Install BlinkPad application"
+                className="p-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 transition-all active:scale-95"
+              >
+                <DownloadCloud className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Theme Toggle Button */}
             <button
-              onClick={install}
-              className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-brand-500/15 hover:bg-brand-500/25 text-brand-600 dark:text-brand-400 border border-brand-500/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-              title="Install BlinkPad to your device"
+              onClick={onToggleTheme}
+              title={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Mode`}
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/10 transition-all active:scale-95"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Install App</span>
+              {theme === 'light' ? <Moon className="w-4 h-4 text-purple-600" /> : <Sun className="w-4 h-4 text-amber-400" />}
             </button>
-          )}
 
-          {/* 24-Hour Expiration countdown */}
-          {expiresAt && (
-            <div
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
-                countdown.isExpired
-                  ? 'bg-red-500/10 text-red-600 border-red-500/30 dark:text-red-400'
-                  : countdown.isWarning
-                  ? 'bg-amber-500/10 text-amber-600 border-amber-500/30 dark:text-amber-400 animate-pulse'
-                  : 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20'
-              }`}
-              title={countdown.isExpired ? 'Page expired' : `Strict 24-hour cloud expiration: ${formatDate(expiresAt)} (IST)`}
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">24h Expiry:</span>
-              <span className="font-mono">{countdown.formatted}</span>
-            </div>
-          )}
-
-          {/* Password Protected Read-Only Badge (NO edit/change options inside pad) */}
-          {hasPassword && (
-            <div
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/25 select-none"
-              title="This page is password protected"
-            >
-              <Lock className="w-3.5 h-3.5 text-brand-500" />
-              <span className="hidden sm:inline">Protected</span>
-            </div>
-          )}
-
-          {/* Delete Page */}
-          {pageName && onDeletePageClick && (
-            <button
-              onClick={onDeletePageClick}
-              className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer"
-              title="Delete this entire page"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
-
-          {/* Theme Switcher */}
-          <button
-            onClick={onToggleTheme}
-            className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-xl border border-slate-200 dark:border-purple-900/40 transition-colors cursor-pointer"
-            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-          >
-            {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
-          </button>
+            {/* Delete Pad Button */}
+            {pageName && onDeletePageClick && (
+              <button
+                onClick={onDeletePageClick}
+                title="Delete this entire pad and its files"
+                className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 transition-all active:scale-95"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      {/* Share Modal */}
+      {pageName && (
+        <ShareModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          pageName={pageName}
+          hasPassword={hasPassword}
+          expiresAt={expiresAt}
+        />
+      )}
+    </>
   );
 };

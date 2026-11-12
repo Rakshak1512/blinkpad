@@ -1,12 +1,3 @@
-export interface Env {
-  R2_BUCKET: R2Bucket;
-  APP_NAME?: string;
-  APP_ENV?: string;
-  APP_BASE_URL?: string;
-  ALLOWED_ORIGIN?: string;
-  AUTH_SECRET?: string; // used for HMAC token signing
-}
-
 export interface PageFile {
   id: string;
   name: string;
@@ -14,7 +5,7 @@ export interface PageFile {
   size: number;
   uploaded_at: number;
   expires_at: number;
-  r2_key: string;
+  r2_key: string; // Storage path in Supabase bucket
 }
 
 export interface PageManifest {
@@ -52,4 +43,3 @@ export interface PageResponse {
   content: string;
   server_time: number;
 }
-

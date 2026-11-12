@@ -58,17 +58,18 @@ test('Crypto: session HMAC auth token creation and verification', async () => {
   assert.equal(wrongSecret, false);
 });
 
-test('Expiration: 24-hour page expiration and file bounds', () => {
+test('Expiration: 12-hour page expiration and file bounds', () => {
   const now = 1730000000000;
   const pageExpiresAt = calculatePageExpiresAt(now);
 
-  assert.equal(pageExpiresAt, now + 24 * 3600 * 1000);
+  assert.equal(pageExpiresAt, now + 12 * 3600 * 1000);
   assert.equal(pageExpiresAt - now, PAGE_LIFETIME_MS);
+  assert.equal(PAGE_LIFETIME_MS, 12 * 60 * 60 * 1000);
 
-  // File uploaded 10 hours after page creation
-  const file1Upload = now + 10 * 3600 * 1000;
+  // File uploaded 6 hours after page creation
+  const file1Upload = now + 6 * 3600 * 1000;
   const file1ExpiresAt = calculateFileExpiresAt(file1Upload, pageExpiresAt);
-  // File 1 upload + 48h would exceed pageExpiresAt, so it must clamp to pageExpiresAt!
+  // File 1 upload + 12h would exceed pageExpiresAt, so it must clamp to pageExpiresAt!
   assert.equal(file1ExpiresAt, pageExpiresAt);
 
   // Expired check

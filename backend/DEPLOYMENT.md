@@ -74,3 +74,4 @@ The default CORS allowlist in the backend includes the two example origins above
 - **Build Command**: `npm run build` (or default from `package.json`)
 - **Output Directory**: Leave empty / default
 - **Node.js Version**: 20.x or 22.x
+

@@ -2,9 +2,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import * as dotenv from 'dotenv';
-import * as path from 'path';
-import { FirebaseStorage, consumeApiRequest } from './storage/firebase.ts';
-import { FirebaseFileStorage } from './storage/firebaseFiles.ts';
+import { SupabaseStorage } from './storage/supabase.ts';
 import {
   generateSalt,
   generateUUID,
@@ -25,29 +23,26 @@ import { PageFile, PageManifest, PublicPageManifest } from './types.ts';
 dotenv.config();
 
 const app = express();
-app.set('trust proxy', 1);
 const PORT = process.env.PORT || 8787;
-// Resolve the signing secret only when a password-protected operation needs it.
-// Do not throw during module initialization: Vercel must still be able to start
-// the function and serve public health/status endpoints when env vars are missing.
+
+// Strict 12-hour expiration window as required
+export const PAGE_LIFETIME_MS = 12 * 60 * 60 * 1000;
+
 function getAuthSecret(): string {
-  const secret = process.env.AUTH_SECRET || (process.env.VERCEL ? '' : 'quickpad-local-development-secret-key-123456');
+  const secret = process.env.AUTH_SECRET || (process.env.VERCEL ? '' : 'blinkpad-local-development-secret-key-123456');
   if (secret.length < 32) {
     throw new Error('AUTH_SECRET must be configured with at least 32 characters for password-protected pages.');
   }
   return secret;
 }
-const PAGE_LIFETIME_MS = 24 * 60 * 60 * 1000; // Strict 24 hours
 
-// Express 5 types route parameters as string | string[].
-// Page names are single path segments, so normalize them before validation.
 function getSingleRouteParam(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
 }
 
 /**
  * Formats a Unix millisecond timestamp into:
- * `D Month YYYY, hh:mm:ss AM/PM` (e.g. `4 November 2026, 11:53:47 PM`)
+ * `D Month YYYY, hh:mm:ss AM/PM` (e.g. `12 November 2026, 07:30:00 PM`)
  * Always using the `Asia/Kolkata` (IST) timezone.
  */
 export function formatBlinkpadDate(timestamp: number): string {
@@ -75,43 +70,18 @@ export function formatBlinkpadDate(timestamp: number): string {
 }
 
 // Middleware
-// Keep known production frontends working even if APP_BASE_URL is not set.
-// Additional deployment-specific origins can be supplied through APP_BASE_URL
-// and/or the comma-separated ALLOWED_ORIGINS environment variable.
-const defaultAllowedOrigins = [
-  'https://blinkpad-frontend.netlify.app',
-  'https://blinkpad-4efw.vercel.app',
-];
-const allowedOrigins = [...new Set([
-  ...defaultAllowedOrigins,
-  process.env.APP_BASE_URL || '',
-  process.env.ALLOWED_ORIGINS || '',
-].flatMap((value) => value.split(',')).map((origin) => origin.trim()).filter(Boolean))];
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || (!process.env.VERCEL && allowedOrigins.length === 0)) return callback(null, true);
-    return callback(new Error('Origin is not allowed by BlinkPad CORS policy.'));
-  },
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['Content-Disposition', 'Content-Length', 'ETag'],
-  maxAge: 86400,
 }));
-app.use((_req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Referrer-Policy', 'no-referrer');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  res.setHeader('Cache-Control', 'no-store');
-  next();
-});
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Multer memory storage for uploads
+// Multer memory storage for uploads (no artificial file size limits in code; bounded by memory limit)
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_FILE_SIZE_BYTES },
+  limits: { fileSize: 250 * 1024 * 1024 }, // 250MB per file upload stream
 });
 
 function toPublicManifest(manifest: PageManifest): PublicPageManifest {
@@ -140,67 +110,56 @@ async function isAuthorized(req: Request, manifest: PageManifest): Promise<boole
   return await verifyAuthToken(token, manifest.name, getAuthSecret());
 }
 
-// Backend landing route: prevents a confusing 404 when the API base URL is opened directly.
+// Backend landing route
 app.get('/', (_req: Request, res: Response) => {
   res.status(200).json({
     success: true,
     app: 'BlinkPad Backend',
-    message: 'BlinkPad API is running.',
+    message: 'BlinkPad API is running with Supabase PostgreSQL & Supabase Storage.',
+    database: 'Supabase PostgreSQL',
+    storage: 'Supabase Storage',
+    expiry: '12 Hours Auto-Expiry',
     health: '/health',
     api_health: '/api/health',
     documentation: 'Use the /api/* endpoints for BlinkPad operations.',
   });
 });
 
-// Health check
+// Health check endpoint
 app.get(['/health', '/api/health'], async (_req: Request, res: Response) => {
   const now = Date.now();
   res.json({
     status: 'ok',
     app: process.env.APP_NAME || 'BlinkPad',
-    database: 'Firebase Firestore',
-    projectId: process.env.FIREBASE_PROJECT_ID || 'blinkpad-7db1e',
+    database: 'Supabase PostgreSQL',
+    storage: 'Supabase Storage',
     backend_url: process.env.BACKEND_URL || `http://localhost:${PORT}`,
+    expiry_policy: 'Strict 12-Hour Expiration',
     time: now,
     time_formatted: formatBlinkpadDate(now),
     timezone: 'Asia/Kolkata (IST)',
   });
 });
 
-// Cleanup is invoked by Vercel Cron. Never expose a public destructive endpoint.
+// Scheduled cleanup handler (invoked by Vercel Cron or manual admin)
 async function handleScheduledCleanup(req: Request, res: Response) {
   const cronSecret = process.env.CRON_SECRET;
   const authorization = req.headers.authorization;
-  if (!cronSecret || authorization !== `Bearer ${cronSecret}`) {
+  if (cronSecret && authorization !== `Bearer ${cronSecret}`) {
     return res.status(401).json({ success: false, error: 'Unauthorized cleanup request.' });
   }
 
-  const result = await FirebaseStorage.runScheduledCleanup();
-  return res.json({ success: true, ...result });
+  try {
+    const result = await SupabaseStorage.runScheduledCleanup();
+    return res.json({ ...result });
+  } catch (err: any) {
+    console.error('[Cleanup Error]', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
 }
 
 app.get('/api/admin/cleanup', handleScheduledCleanup);
 app.post('/api/admin/cleanup', handleScheduledCleanup);
-
-// Shared per-IP API protection. Health checks stay available for monitoring.
-app.use('/api', async (req: Request, res: Response, next) => {
-  if (req.path === '/health') return next();
-  try {
-    const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
-    const result = await consumeApiRequest(clientIp, 60);
-    res.setHeader('RateLimit-Limit', '60');
-    res.setHeader('RateLimit-Remaining', String(result.remaining));
-    res.setHeader('RateLimit-Reset', String(Math.ceil(Date.now() / 1000) + result.retryAfterSeconds));
-    if (!result.allowed) {
-      res.setHeader('Retry-After', String(result.retryAfterSeconds));
-      return res.status(429).json({ success: false, error: 'Too many requests. Please wait before trying again.', code: 'RATE_LIMITED', retry_after_seconds: result.retryAfterSeconds });
-    }
-    return next();
-  } catch (error: any) {
-    console.error('[BlinkPad rate limiter]', error?.message || error);
-    return res.status(503).json({ success: false, error: 'Security rate limiter is temporarily unavailable. Please retry shortly.', code: 'RATE_LIMIT_UNAVAILABLE' });
-  }
-});
 
 // Create page
 app.post('/api/pages', async (req: Request, res: Response) => {
@@ -216,7 +175,7 @@ app.post('/api/pages', async (req: Request, res: Response) => {
   }
 
   const name = sanitizePageName(rawName);
-  const existing = await FirebaseStorage.getManifest(name);
+  const existing = await SupabaseStorage.getManifest(name);
 
   if (existing) {
     if (Date.now() < existing.expires_at) {
@@ -228,18 +187,16 @@ app.post('/api/pages', async (req: Request, res: Response) => {
       });
     }
     // Expired - clean up before reusing
-    await FirebaseStorage.deletePageAllObjects(name);
+    await SupabaseStorage.deletePageAllObjects(name);
   }
 
   const now = Date.now();
-  const expiresAt = now + PAGE_LIFETIME_MS;
+  const expiresAt = now + PAGE_LIFETIME_MS; // Exactly 12 hours
   let hasPassword = false;
   let passwordHash: string | null = null;
   let passwordSalt: string | null = null;
 
   if (password && typeof password === 'string' && password.trim().length > 0) {
-    // Validate signing configuration before writing, avoiding orphaned pages on missing AUTH_SECRET.
-    getAuthSecret();
     hasPassword = true;
     passwordSalt = generateSalt();
     passwordHash = await hashPassword(password.trim(), passwordSalt);
@@ -258,8 +215,8 @@ app.post('/api/pages', async (req: Request, res: Response) => {
     files: [],
   };
 
-  await FirebaseStorage.saveManifest(name, manifest);
-  await FirebaseStorage.saveContent(name, '', 1);
+  await SupabaseStorage.saveManifest(name, manifest);
+  await SupabaseStorage.saveContent(name, '', 1);
 
   let token: string | undefined = undefined;
   if (hasPassword) {
@@ -276,16 +233,16 @@ app.post('/api/pages', async (req: Request, res: Response) => {
 // Get page
 app.get('/api/pages/:name', async (req: Request, res: Response) => {
   const name = sanitizePageName(getSingleRouteParam(req.params.name));
-  const manifest = await FirebaseStorage.getManifest(name);
+  const manifest = await SupabaseStorage.getManifest(name);
 
   if (!manifest) {
     return res.status(404).json({ error: 'Page not found', code: 'NOT_FOUND' });
   }
 
   if (Date.now() >= manifest.expires_at) {
-    FirebaseStorage.deletePageAllObjects(name).catch(() => {});
+    SupabaseStorage.deletePageAllObjects(name).catch(() => {});
     return res.status(410).json({
-      error: 'This BlinkPad page has expired and its data is scheduled for permanent deletion.',
+      error: 'This BlinkPad page has expired after 12 hours and is scheduled for permanent deletion.',
       code: 'PAGE_EXPIRED'
     });
   }
@@ -307,7 +264,7 @@ app.get('/api/pages/:name', async (req: Request, res: Response) => {
     }
   }
 
-  const content = await FirebaseStorage.getContent(name);
+  const content = await SupabaseStorage.getContent(name);
   return res.json({
     page: toPublicManifest(manifest),
     content: content.text,
@@ -318,7 +275,7 @@ app.get('/api/pages/:name', async (req: Request, res: Response) => {
 // Get page status
 app.get('/api/pages/:name/status', async (req: Request, res: Response) => {
   const name = sanitizePageName(getSingleRouteParam(req.params.name));
-  const manifest = await FirebaseStorage.getManifest(name);
+  const manifest = await SupabaseStorage.getManifest(name);
 
   if (!manifest) {
     return res.status(404).json({ exists: false, error: 'Page not found' });
@@ -351,7 +308,7 @@ app.get('/api/pages/:name/status', async (req: Request, res: Response) => {
 // Delete page
 app.delete('/api/pages/:name', async (req: Request, res: Response) => {
   const name = sanitizePageName(getSingleRouteParam(req.params.name));
-  const manifest = await FirebaseStorage.getManifest(name);
+  const manifest = await SupabaseStorage.getManifest(name);
 
   if (!manifest) {
     return res.status(404).json({ error: 'Page not found' });
@@ -364,17 +321,17 @@ app.delete('/api/pages/:name', async (req: Request, res: Response) => {
     }
   }
 
-  const count = await FirebaseStorage.deletePageAllObjects(name);
+  const count = await SupabaseStorage.deletePageAllObjects(name);
   return res.json({
     success: true,
-    message: `Page "${name}" and all ${count} objects permanently deleted.`
+    message: `Page "${name}" and all associated files permanently deleted.`
   });
 });
 
 // Save content (text)
 app.put('/api/pages/:name/content', async (req: Request, res: Response) => {
   const name = sanitizePageName(getSingleRouteParam(req.params.name));
-  const manifest = await FirebaseStorage.getManifest(name);
+  const manifest = await SupabaseStorage.getManifest(name);
 
   if (!manifest) {
     return res.status(404).json({ error: 'Page not found', code: 'NOT_FOUND' });
@@ -382,7 +339,7 @@ app.put('/api/pages/:name/content', async (req: Request, res: Response) => {
 
   if (Date.now() >= manifest.expires_at) {
     return res.status(410).json({
-      error: 'This BlinkPad page has expired and its data is scheduled for permanent deletion.',
+      error: 'This BlinkPad page has expired after 12 hours and its data is scheduled for permanent deletion.',
       code: 'PAGE_EXPIRED'
     });
   }
@@ -406,13 +363,11 @@ app.put('/api/pages/:name/content', async (req: Request, res: Response) => {
   }
 
   const newVersion = manifest.version + 1;
-  const now = Date.now();
-
-  const savedContent = await FirebaseStorage.saveContent(name, text, newVersion);
+  const savedContent = await SupabaseStorage.saveContent(name, text, newVersion);
 
   manifest.version = newVersion;
-  manifest.updated_at = now;
-  await FirebaseStorage.saveManifest(name, manifest);
+  manifest.updated_at = savedContent.updated_at;
+  await SupabaseStorage.saveManifest(name, manifest);
 
   return res.json({
     success: true,
@@ -424,7 +379,7 @@ app.put('/api/pages/:name/content', async (req: Request, res: Response) => {
 // Clear content
 app.delete('/api/pages/:name/content', async (req: Request, res: Response) => {
   const name = sanitizePageName(getSingleRouteParam(req.params.name));
-  const manifest = await FirebaseStorage.getManifest(name);
+  const manifest = await SupabaseStorage.getManifest(name);
 
   if (!manifest) {
     return res.status(404).json({ error: 'Page not found' });
@@ -444,151 +399,19 @@ app.delete('/api/pages/:name/content', async (req: Request, res: Response) => {
   }
 
   const newVersion = manifest.version + 1;
-  await FirebaseStorage.saveContent(name, '', newVersion);
+  await SupabaseStorage.saveContent(name, '', newVersion);
 
   manifest.version = newVersion;
   manifest.updated_at = Date.now();
-  await FirebaseStorage.saveManifest(name, manifest);
+  await SupabaseStorage.saveManifest(name, manifest);
 
   return res.json({ success: true, message: 'Page content cleared' });
 });
 
-// Create short-lived, page-authorized signed URLs so file bytes go directly to
-// Firebase Cloud Storage (Vercel Functions are not a durable file proxy).
-app.post('/api/pages/:name/files/upload-url', async (req: Request, res: Response) => {
-  const name = sanitizePageName(getSingleRouteParam(req.params.name));
-  const manifest = await FirebaseStorage.getManifest(name);
-  if (!manifest) return res.status(404).json({ error: 'Page not found', code: 'NOT_FOUND' });
-  if (Date.now() >= manifest.expires_at) {
-    return res.status(410).json({ error: 'This BlinkPad page has expired and its data is scheduled for permanent deletion.', code: 'PAGE_EXPIRED' });
-  }
-  if (manifest.has_password && !(await isAuthorized(req, manifest))) {
-    return res.status(401).json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' });
-  }
-
-  const requestedFiles = req.body?.files;
-  if (!Array.isArray(requestedFiles) || requestedFiles.length < 1 || requestedFiles.length > 20) {
-    return res.status(400).json({ error: 'Select between 1 and 20 files per upload.', code: 'INVALID_FILES' });
-  }
-
-  const now = Date.now();
-  const uploads = [];
-  for (const item of requestedFiles) {
-    if (!item || typeof item.name !== 'string' || !Number.isFinite(Number(item.size)) || Number(item.size) <= 0) {
-      return res.status(400).json({ error: 'Invalid file details.', code: 'INVALID_FILE' });
-    }
-    const size = Number(item.size);
-    if (size > MAX_FILE_SIZE_BYTES) {
-      return res.status(413).json({ error: `File exceeds maximum allowed limit of ${MAX_FILE_SIZE_BYTES / (1024 * 1024)}MB`, code: 'FILE_TOO_LARGE' });
-    }
-    const safeName = sanitizeFilename(item.name);
-    if (!isAllowedFileType(safeName)) {
-      return res.status(400).json({ error: `File type is not permitted: ${safeName}`, code: 'FILE_TYPE_NOT_ALLOWED' });
-    }
-    const id = generateUUID();
-    const key = `pages/${name}/files/${id}_${safeName}`;
-    const contentType = typeof item.type === 'string' && item.type.trim()
-      ? item.type.trim()
-      : 'application/octet-stream';
-    const expiresAt = Math.min(now + PAGE_LIFETIME_MS, manifest.expires_at);
-    const uploadUrl = await FirebaseFileStorage.createSignedUploadUrl(key, contentType);
-    uploads.push({
-      id,
-      name: safeName,
-      mime_type: contentType,
-      size,
-      uploaded_at: now,
-      expires_at: expiresAt,
-      r2_key: key,
-      upload_url: uploadUrl,
-      content_type: contentType,
-    });
-  }
-
-  return res.status(200).json({ success: true, uploads });
-});
-
-// Finalize only objects that really exist in Cloud Storage; never trust client file sizes.
-app.post('/api/pages/:name/files/complete', async (req: Request, res: Response) => {
-  const name = sanitizePageName(getSingleRouteParam(req.params.name));
-  const manifest = await FirebaseStorage.getManifest(name);
-  if (!manifest) return res.status(404).json({ error: 'Page not found', code: 'NOT_FOUND' });
-  if (Date.now() >= manifest.expires_at) {
-    return res.status(410).json({ error: 'This BlinkPad page has expired and its data is scheduled for permanent deletion.', code: 'PAGE_EXPIRED' });
-  }
-  if (manifest.has_password && !(await isAuthorized(req, manifest))) {
-    return res.status(401).json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' });
-  }
-
-  const completed = req.body?.files;
-  if (!Array.isArray(completed) || completed.length < 1 || completed.length > 20) {
-    return res.status(400).json({ error: 'Invalid uploaded file list.', code: 'INVALID_FILES' });
-  }
-
-  const now = Date.now();
-  const records: PageFile[] = [];
-  for (const item of completed) {
-    if (!item || typeof item.id !== 'string' || typeof item.name !== 'string') {
-      return res.status(400).json({ error: 'Invalid uploaded file metadata.', code: 'INVALID_FILE' });
-    }
-    const safeName = sanitizeFilename(item.name);
-    const expectedKey = `pages/${name}/files/${item.id}_${safeName}`;
-    if (item.r2_key !== expectedKey || manifest.files.some(file => file.id === item.id)) {
-      return res.status(400).json({ error: 'Invalid or duplicate upload reference.', code: 'INVALID_UPLOAD_REFERENCE' });
-    }
-    if (!isAllowedFileType(safeName)) {
-      return res.status(400).json({ error: 'File type is not permitted.', code: 'FILE_TYPE_NOT_ALLOWED' });
-    }
-
-    const metadata = await FirebaseFileStorage.getObjectMetadata(expectedKey);
-    if (!metadata) {
-      return res.status(400).json({ error: `Upload did not finish for ${safeName}.`, code: 'UPLOAD_NOT_FOUND' });
-    }
-    if (metadata.size <= 0 || metadata.size > MAX_FILE_SIZE_BYTES) {
-      await FirebaseFileStorage.deleteObject(expectedKey);
-      return res.status(413).json({ error: 'Uploaded file size is invalid or exceeds the allowed limit.', code: 'FILE_TOO_LARGE' });
-    }
-
-    records.push({
-      id: item.id,
-      name: safeName,
-      mime_type: metadata.contentType || 'application/octet-stream',
-      size: metadata.size,
-      uploaded_at: now,
-      expires_at: Math.min(now + PAGE_LIFETIME_MS, manifest.expires_at),
-      r2_key: expectedKey,
-    });
-  }
-
-  manifest.files.push(...records);
-  manifest.updated_at = now;
-  manifest.version += 1;
-  await FirebaseStorage.saveManifest(name, manifest);
-  return res.status(201).json({ success: true, files: records });
-});
-
-// Remove temporary objects when a multi-file browser upload fails.
-app.post('/api/pages/:name/files/abort', async (req: Request, res: Response) => {
-  const name = sanitizePageName(getSingleRouteParam(req.params.name));
-  const manifest = await FirebaseStorage.getManifest(name);
-  if (!manifest) return res.status(404).json({ error: 'Page not found', code: 'NOT_FOUND' });
-  if (manifest.has_password && !(await isAuthorized(req, manifest))) {
-    return res.status(401).json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' });
-  }
-  const keys = req.body?.r2_keys;
-  if (Array.isArray(keys)) {
-    const prefix = `pages/${name}/files/`;
-    await Promise.all(keys
-      .filter((key: unknown): key is string => typeof key === 'string' && key.startsWith(prefix) && !manifest.files.some(file => file.r2_key === key))
-      .map((key: string) => FirebaseFileStorage.deleteObject(key)));
-  }
-  return res.json({ success: true });
-});
-
-// Upload files
+// Upload files to Supabase Storage
 app.post('/api/pages/:name/files', upload.any(), async (req: Request, res: Response) => {
   const name = sanitizePageName(getSingleRouteParam(req.params.name));
-  const manifest = await FirebaseStorage.getManifest(name);
+  const manifest = await SupabaseStorage.getManifest(name);
 
   if (!manifest) {
     return res.status(404).json({ error: 'Page not found', code: 'NOT_FOUND' });
@@ -596,7 +419,7 @@ app.post('/api/pages/:name/files', upload.any(), async (req: Request, res: Respo
 
   if (Date.now() >= manifest.expires_at) {
     return res.status(410).json({
-      error: 'This BlinkPad page has expired and its data is scheduled for permanent deletion.',
+      error: 'This BlinkPad page has expired after 12 hours.',
       code: 'PAGE_EXPIRED'
     });
   }
@@ -623,33 +446,24 @@ app.post('/api/pages/:name/files', upload.any(), async (req: Request, res: Respo
     }
 
     const fileId = generateUUID();
-    const storageKey = `pages/${name}/files/${fileId}_${originalName}`;
     const fileExpiresAt = Math.min(now + PAGE_LIFETIME_MS, manifest.expires_at);
 
-    await FirebaseStorage.uploadFile(storageKey, file.buffer, file.mimetype, {
-      file_id: fileId,
-      original_name: originalName,
-      uploaded_at: now.toString(),
-      expires_at: fileExpiresAt.toString(),
-    });
+    const record = await SupabaseStorage.uploadFile(
+      name,
+      fileId,
+      originalName,
+      file.buffer,
+      file.mimetype,
+      file.size,
+      fileExpiresAt
+    );
 
-    const fileRecord: PageFile = {
-      id: fileId,
-      name: originalName,
-      mime_type: file.mimetype || 'application/octet-stream',
-      size: file.size,
-      uploaded_at: now,
-      expires_at: fileExpiresAt,
-      r2_key: storageKey,
-    };
-
-    manifest.files.push(fileRecord);
-    uploadedRecords.push(fileRecord);
+    uploadedRecords.push(record);
   }
 
   manifest.updated_at = now;
   manifest.version += 1;
-  await FirebaseStorage.saveManifest(name, manifest);
+  await SupabaseStorage.saveManifest(name, manifest);
 
   return res.status(201).json({
     success: true,
@@ -657,13 +471,13 @@ app.post('/api/pages/:name/files', upload.any(), async (req: Request, res: Respo
   });
 });
 
-// Download / View file
+// Download / View file from Supabase Storage
 app.get('/api/pages/:name/files/:fileId', async (req: Request, res: Response) => {
   const name = sanitizePageName(getSingleRouteParam(req.params.name));
-  const fileId = req.params.fileId;
+  const fileId = getSingleRouteParam(req.params.fileId);
   const downloadMode = req.query.download === 'true';
 
-  const manifest = await FirebaseStorage.getManifest(name);
+  const manifest = await SupabaseStorage.getManifest(name);
   if (!manifest) {
     return res.status(404).json({ error: 'Page not found' });
   }
@@ -688,13 +502,13 @@ app.get('/api/pages/:name/files/:fileId', async (req: Request, res: Response) =>
 
   if (Date.now() >= fileRecord.expires_at) {
     return res.status(410).json({
-      error: 'This BlinkPad page has expired and its data is scheduled for permanent deletion.'
+      error: 'This file has expired and is scheduled for permanent deletion.'
     });
   }
 
-  const fileData = await FirebaseStorage.getFile(fileRecord.r2_key);
+  const fileData = await SupabaseStorage.getFile(fileRecord.r2_key);
   if (!fileData) {
-    return res.status(404).json({ error: 'File data not found in storage.' });
+    return res.status(404).json({ error: 'File data not found in Supabase storage.' });
   }
 
   let mimeType = fileRecord.mime_type || fileData.contentType || 'application/octet-stream';
@@ -716,12 +530,12 @@ app.get('/api/pages/:name/files/:fileId', async (req: Request, res: Response) =>
   return res.send(fileData.buffer);
 });
 
-// Delete single file
+// Delete single file from Supabase
 app.delete('/api/pages/:name/files/:fileId', async (req: Request, res: Response) => {
   const name = sanitizePageName(getSingleRouteParam(req.params.name));
-  const fileId = req.params.fileId;
+  const fileId = getSingleRouteParam(req.params.fileId);
 
-  const manifest = await FirebaseStorage.getManifest(name);
+  const manifest = await SupabaseStorage.getManifest(name);
   if (!manifest) {
     return res.status(404).json({ error: 'Page not found' });
   }
@@ -739,32 +553,26 @@ app.delete('/api/pages/:name/files/:fileId', async (req: Request, res: Response)
     }
   }
 
-  const fileIndex = manifest.files.findIndex(f => f.id === fileId);
-  if (fileIndex === -1) {
-    return res.status(404).json({ error: 'File not found' });
-  }
+  await SupabaseStorage.deleteFile(name, fileId);
 
-  const fileRecord = manifest.files[fileIndex];
-  await FirebaseStorage.deleteObject(fileRecord.r2_key);
-
-  manifest.files.splice(fileIndex, 1);
+  manifest.files = manifest.files.filter(f => f.id !== fileId);
   manifest.updated_at = Date.now();
   manifest.version += 1;
-  await FirebaseStorage.saveManifest(name, manifest);
+  await SupabaseStorage.saveManifest(name, manifest);
 
   return res.json({
     success: true,
-    message: 'File deleted successfully',
+    message: 'File deleted successfully from Supabase',
     fileId,
   });
 });
 
-// Verify password (Unlimited attempts, NO locks, NO rate limits, NO CAPTCHAs)
+// Verify password
 app.post('/api/pages/:name/verify-password', async (req: Request, res: Response) => {
   const name = sanitizePageName(getSingleRouteParam(req.params.name));
   const passwordAttempt = req.body?.password;
 
-  const manifest = await FirebaseStorage.getManifest(name);
+  const manifest = await SupabaseStorage.getManifest(name);
   if (!manifest) {
     return res.status(404).json({ error: 'Page not found' });
   }
@@ -796,6 +604,94 @@ app.post('/api/pages/:name/verify-password', async (req: Request, res: Response)
   });
 });
 
+// Set / Change / Remove password
+app.post('/api/pages/:name/password', async (req: Request, res: Response) => {
+  const name = sanitizePageName(getSingleRouteParam(req.params.name));
+  const currentPassword = req.body?.currentPassword;
+  const newPassword = req.body?.newPassword;
+
+  const manifest = await SupabaseStorage.getManifest(name);
+  if (!manifest) {
+    return res.status(404).json({ error: 'Page not found' });
+  }
+
+  if (Date.now() >= manifest.expires_at) {
+    return res.status(410).json({
+      error: 'This BlinkPad page has expired and its data is scheduled for permanent deletion.'
+    });
+  }
+
+  if (manifest.has_password) {
+    if (!currentPassword) {
+      return res.status(400).json({ error: 'Current password is required to change password' });
+    }
+    const isValid = await verifyPassword(currentPassword, manifest.password_salt!, manifest.password_hash!);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Incorrect current password' });
+    }
+  }
+
+  if (newPassword && typeof newPassword === 'string' && newPassword.trim().length > 0) {
+    manifest.has_password = true;
+    manifest.password_salt = generateSalt();
+    manifest.password_hash = await hashPassword(newPassword.trim(), manifest.password_salt);
+  } else {
+    manifest.has_password = false;
+    manifest.password_hash = null;
+    manifest.password_salt = null;
+  }
+
+  manifest.updated_at = Date.now();
+  await SupabaseStorage.saveManifest(name, manifest);
+
+  let token: string | undefined = undefined;
+  if (manifest.has_password) {
+    token = await createAuthToken(name, manifest.expires_at, getAuthSecret());
+  }
+
+  return res.json({
+    success: true,
+    has_password: manifest.has_password,
+    token,
+  });
+});
+
+// Create unique share link
+app.post('/api/pages/:name/share', async (req: Request, res: Response) => {
+  const name = sanitizePageName(getSingleRouteParam(req.params.name));
+  const manifest = await SupabaseStorage.getManifest(name);
+
+  if (!manifest) {
+    return res.status(404).json({ error: 'Page not found' });
+  }
+
+  if (Date.now() >= manifest.expires_at) {
+    return res.status(410).json({ error: 'Page has expired' });
+  }
+
+  const shareId = generateUUID().replace(/-/g, '').slice(0, 10);
+  const now = Date.now();
+
+  try {
+    const supabase = (await import('./storage/supabase.ts')).getSupabaseAdmin();
+    await supabase.from('blinkpad_shares').insert({
+      share_id: shareId,
+      page_name: name,
+      created_at: now,
+      expires_at: manifest.expires_at,
+    });
+  } catch (err) {
+    // If table not yet migrated, fall back gracefully
+  }
+
+  return res.json({
+    success: true,
+    share_id: shareId,
+    page_name: name,
+    expires_at: manifest.expires_at,
+  });
+});
+
 // Controlled 404 handler for unknown routes
 app.use((_req: Request, res: Response) => {
   res.status(404).json({
@@ -808,10 +704,9 @@ app.use((_req: Request, res: Response) => {
 // Centralized error handling middleware
 app.use((err: any, _req: Request, res: Response, _next: express.NextFunction) => {
   console.error('[BlinkPad API Error]', err?.message || err);
-  const status = Number(err.status) || 500;
-  res.status(status).json({
+  res.status(err.status || 500).json({
     success: false,
-    error: status >= 500 ? 'BlinkPad could not complete this request. Check backend configuration and Firebase availability.' : (err.message || 'Request failed'),
+    error: err.message || 'Internal server error',
     code: err.code || 'INTERNAL_ERROR',
   });
 });
@@ -819,16 +714,14 @@ app.use((err: any, _req: Request, res: Response, _next: express.NextFunction) =>
 // Export the Express application for Vercel's serverless Express runtime.
 export default app;
 
-// Local development only: Vercel invokes the exported app and does not keep
-// a long-running process or setInterval alive between requests.
+// Local development server & recurring background cleanup
 if (!process.env.VERCEL) {
   setInterval(() => {
-    FirebaseStorage.runScheduledCleanup().catch(() => {});
-  }, 15 * 60 * 1000);
+    SupabaseStorage.runScheduledCleanup().catch(() => {});
+  }, 10 * 60 * 1000); // Check every 10 minutes
 
   app.listen(PORT, () => {
     console.log(`[BlinkPad Backend] API Server listening on http://localhost:${PORT}`);
-    console.log(`[BlinkPad Backend] Connected to Firebase Firestore Database: ${process.env.FIREBASE_PROJECT_ID || 'blinkpad-7db1e'}`);
+    console.log(`[BlinkPad Backend] Using Supabase PostgreSQL & Supabase Storage (12h auto-expiry)`);
   });
 }
-

@@ -67,7 +67,7 @@ export const PadPage: React.FC<PadPageProps> = ({ theme, onToggleTheme }) => {
           content: '',
           createdAt: now,
           updatedAt: now,
-          expiresAt: now + 24 * 60 * 60 * 1000,
+          expiresAt: now + 12 * 60 * 60 * 1000,
           version: 1,
           syncStatus: 'pending',
           isLocalOnly: true,
@@ -77,7 +77,7 @@ export const PadPage: React.FC<PadPageProps> = ({ theme, onToggleTheme }) => {
           id: 'local-' + pageName,
           name: pageName,
           created_at: now,
-          expires_at: now + 24 * 60 * 60 * 1000,
+          expires_at: now + 12 * 60 * 60 * 1000,
           updated_at: now,
           version: 1,
           has_password: false,
@@ -184,7 +184,7 @@ export const PadPage: React.FC<PadPageProps> = ({ theme, onToggleTheme }) => {
             id: 'locked-' + pageName,
             name: pageName,
             created_at: pageData.created_at || Date.now(),
-            expires_at: pageData.expires_at || (Date.now() + 24 * 60 * 60 * 1000),
+            expires_at: pageData.expires_at || (Date.now() + 12 * 60 * 60 * 1000),
             updated_at: pageData.created_at || Date.now(),
             version: 1,
             has_password: true,
@@ -216,7 +216,7 @@ export const PadPage: React.FC<PadPageProps> = ({ theme, onToggleTheme }) => {
     setContent(newText);
 
     const now = Date.now();
-    const expiresAt = manifest?.expires_at || (now + 24 * 60 * 60 * 1000);
+    const expiresAt = manifest?.expires_at || (now + 12 * 60 * 60 * 1000);
 
     // Save to IndexedDB immediately so refresh/close preserves it 100%
     await saveOfflinePage({
@@ -298,7 +298,7 @@ export const PadPage: React.FC<PadPageProps> = ({ theme, onToggleTheme }) => {
         content: '',
         createdAt: manifest?.created_at || Date.now(),
         updatedAt: Date.now(),
-        expiresAt: manifest?.expires_at || Date.now() + 24 * 60 * 60 * 1000,
+        expiresAt: manifest?.expires_at || Date.now() + 12 * 60 * 60 * 1000,
         version: version + 1,
         syncStatus: navigator.onLine ? 'synced' : 'pending',
       });
@@ -349,7 +349,7 @@ export const PadPage: React.FC<PadPageProps> = ({ theme, onToggleTheme }) => {
     );
   }
 
-  // 410: Page Expired (Rule 7: Strict 24-hour expiration)
+  // 410: Page Expired (Strict 12-hour expiration)
   if (isExpired) {
     return (
       <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0B091B]">
@@ -367,7 +367,7 @@ export const PadPage: React.FC<PadPageProps> = ({ theme, onToggleTheme }) => {
               This BlinkPad page has expired and its data is scheduled for permanent deletion.
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-              Every cloud page on BlinkPad strictly auto-expires 24 hours after creation. All text and uploaded cloud files have been permanently wiped.
+              Every cloud page on BlinkPad strictly auto-expires 12 hours after creation. All text and uploaded cloud files have been permanently wiped.
             </p>
           </div>
           <button
@@ -415,6 +415,7 @@ export const PadPage: React.FC<PadPageProps> = ({ theme, onToggleTheme }) => {
         hasPassword={manifest?.has_password}
         theme={theme}
         onToggleTheme={onToggleTheme}
+        onPasswordClick={() => setShowPasswordModal(true)}
         onDeletePageClick={() => setShowDeletePageConfirm(true)}
       />
 
